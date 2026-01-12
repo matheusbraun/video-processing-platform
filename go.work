@@ -1,0 +1,10 @@
+go 1.24.3
+
+use (
+	./services/api-gateway
+	./services/auth
+	./services/notification
+	./services/processing-worker
+	./services/storage
+	./shared
+)

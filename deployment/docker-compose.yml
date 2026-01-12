@@ -1,0 +1,233 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: video-platform-postgres
+    environment:
+      POSTGRES_DB: video_platform
+      POSTGRES_USER: videoadmin
+      POSTGRES_PASSWORD: secret
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../scripts/migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U videoadmin -d video_platform"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - video-platform
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: video-platform-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - video-platform
+
+  # RabbitMQ Message Queue
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: video-platform-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: video
+      RABBITMQ_DEFAULT_PASS: secret
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - video-platform
+
+  # Auth Service
+  auth-service:
+    build:
+      context: ../services/auth
+      dockerfile: Dockerfile
+    container_name: video-platform-auth
+    environment:
+      SERVER_PORT: "8080"
+      DATABASE_URL: postgres://videoadmin:secret@postgres:5432/video_platform?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
+      JWT_ACCESS_EXPIRY: ${JWT_ACCESS_EXPIRY:-15m}
+      JWT_REFRESH_EXPIRY: ${JWT_REFRESH_EXPIRY:-168h}
+    ports:
+      - "8081:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - video-platform
+    restart: unless-stopped
+
+  # API Gateway Service
+  api-gateway:
+    build:
+      context: ../services/api-gateway
+      dockerfile: Dockerfile
+    container_name: video-platform-api-gateway
+    environment:
+      SERVER_PORT: "8080"
+      DATABASE_URL: postgres://videoadmin:secret@postgres:5432/video_platform?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://video:secret@rabbitmq:5672/
+      AUTH_SERVICE_URL: http://auth-service:8080
+      STORAGE_SERVICE_URL: http://storage-service:8080
+      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      S3_UPLOADS_BUCKET: ${S3_UPLOADS_BUCKET:-video-platform-uploads}
+      S3_PROCESSED_BUCKET: ${S3_PROCESSED_BUCKET:-video-platform-processed}
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+    networks:
+      - video-platform
+    restart: unless-stopped
+
+  # Processing Worker Service
+  processing-worker:
+    build:
+      context: ../services/processing-worker
+      dockerfile: Dockerfile
+    container_name: video-platform-worker
+    deploy:
+      replicas: 3
+    environment:
+      DATABASE_URL: postgres://videoadmin:secret@postgres:5432/video_platform?sslmode=disable
+      RABBITMQ_URL: amqp://video:secret@rabbitmq:5672/
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      S3_UPLOADS_BUCKET: ${S3_UPLOADS_BUCKET:-video-platform-uploads}
+      S3_PROCESSED_BUCKET: ${S3_PROCESSED_BUCKET:-video-platform-processed}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - video-platform
+    restart: unless-stopped
+
+  # Storage Service
+  storage-service:
+    build:
+      context: ../services/storage
+      dockerfile: Dockerfile
+    container_name: video-platform-storage
+    environment:
+      SERVER_PORT: "8080"
+      DATABASE_URL: postgres://videoadmin:secret@postgres:5432/video_platform?sslmode=disable
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      S3_UPLOADS_BUCKET: ${S3_UPLOADS_BUCKET:-video-platform-uploads}
+      S3_PROCESSED_BUCKET: ${S3_PROCESSED_BUCKET:-video-platform-processed}
+    ports:
+      - "8082:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - video-platform
+    restart: unless-stopped
+
+  # Notification Service
+  notification-service:
+    build:
+      context: ../services/notification
+      dockerfile: Dockerfile
+    container_name: video-platform-notification
+    environment:
+      DATABASE_URL: postgres://videoadmin:secret@postgres:5432/video_platform?sslmode=disable
+      RABBITMQ_URL: amqp://video:secret@rabbitmq:5672/
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - video-platform
+    restart: unless-stopped
+
+  # React UI
+  ui:
+    build:
+      context: ../ui
+      dockerfile: Dockerfile
+    container_name: video-platform-ui
+    environment:
+      VITE_API_URL: http://localhost:8080
+    ports:
+      - "3000:80"
+    depends_on:
+      - api-gateway
+    networks:
+      - video-platform
+    restart: unless-stopped
+
+  # Cleanup Cron Job
+  cleanup-cron:
+    build:
+      context: ../scripts
+      dockerfile: Dockerfile.cleanup
+    container_name: video-platform-cleanup
+    environment:
+      DATABASE_URL: postgres://videoadmin:secret@postgres:5432/video_platform?sslmode=disable
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      S3_UPLOADS_BUCKET: ${S3_UPLOADS_BUCKET:-video-platform-uploads}
+      S3_PROCESSED_BUCKET: ${S3_PROCESSED_BUCKET:-video-platform-processed}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - video-platform
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  rabbitmq_data:
+
+networks:
+  video-platform:
+    driver: bridge
