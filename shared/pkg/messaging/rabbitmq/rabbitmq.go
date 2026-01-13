@@ -9,8 +9,12 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-// Publisher represents a RabbitMQ publisher
-type Publisher struct {
+type Publisher interface {
+	Publish(ctx context.Context, queueName string, message interface{}) error
+	Close() error
+}
+
+type publisher struct {
 	conn    *amqp.Connection
 	channel *amqp.Channel
 }
@@ -21,8 +25,7 @@ type Consumer struct {
 	channel *amqp.Channel
 }
 
-// NewPublisher creates a new RabbitMQ publisher
-func NewPublisher(url string) (*Publisher, error) {
+func NewPublisher(url string) (Publisher, error) {
 	conn, err := amqp.Dial(url)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to RabbitMQ: %w", err)
@@ -34,14 +37,13 @@ func NewPublisher(url string) (*Publisher, error) {
 		return nil, fmt.Errorf("failed to open channel: %w", err)
 	}
 
-	return &Publisher{
+	return &publisher{
 		conn:    conn,
 		channel: channel,
 	}, nil
 }
 
-// Publish publishes a message to a queue
-func (p *Publisher) Publish(ctx context.Context, queueName string, message interface{}) error {
+func (p *publisher) Publish(ctx context.Context, queueName string, message interface{}) error {
 	// Declare queue (idempotent)
 	_, err := p.channel.QueueDeclare(
 		queueName,
@@ -82,8 +84,7 @@ func (p *Publisher) Publish(ctx context.Context, queueName string, message inter
 	return nil
 }
 
-// Close closes the publisher connection
-func (p *Publisher) Close() error {
+func (p *publisher) Close() error {
 	if err := p.channel.Close(); err != nil {
 		return err
 	}

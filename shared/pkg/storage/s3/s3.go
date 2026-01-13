@@ -14,27 +14,30 @@ import (
 	s3Types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
-// Client wraps S3 client operations
-type Client struct {
+type S3Client interface {
+	Upload(ctx context.Context, bucket, key string, body io.Reader) error
+	Download(ctx context.Context, bucket, key string, writer io.WriterAt) error
+	GetObject(ctx context.Context, bucket, key string) (io.ReadCloser, error)
+	Delete(ctx context.Context, bucket, key string) error
+	DeleteMultiple(ctx context.Context, bucket string, keys []string) error
+	GeneratePresignedURL(ctx context.Context, bucket, key string, expiration time.Duration) (string, error)
+	ListObjects(ctx context.Context, bucket, prefix string) ([]string, error)
+}
+
+type client struct {
 	s3Client   *s3.Client
 	uploader   *manager.Uploader
 	downloader *manager.Downloader
+	bucket     string
 }
 
-// Config holds S3 configuration
-type Config struct {
-	Region          string
-	AccessKeyID     string
-	SecretAccessKey string
-}
-
-// NewS3Client creates a new S3 client
-func NewS3Client(ctx context.Context, cfg *Config) (*Client, error) {
+func NewS3Client(region, accessKeyID, secretAccessKey, bucket string) (S3Client, error) {
+	ctx := context.Background()
 	awsCfg, err := config.LoadDefaultConfig(ctx,
-		config.WithRegion(cfg.Region),
+		config.WithRegion(region),
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
-			cfg.AccessKeyID,
-			cfg.SecretAccessKey,
+			accessKeyID,
+			secretAccessKey,
 			"",
 		)),
 	)
@@ -44,15 +47,15 @@ func NewS3Client(ctx context.Context, cfg *Config) (*Client, error) {
 
 	s3Client := s3.NewFromConfig(awsCfg)
 
-	return &Client{
+	return &client{
 		s3Client:   s3Client,
 		uploader:   manager.NewUploader(s3Client),
 		downloader: manager.NewDownloader(s3Client),
+		bucket:     bucket,
 	}, nil
 }
 
-// Upload uploads a file to S3
-func (c *Client) Upload(ctx context.Context, bucket, key string, body io.Reader) error {
+func (c *client) Upload(ctx context.Context, bucket, key string, body io.Reader) error {
 	_, err := c.uploader.Upload(ctx, &s3.PutObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
@@ -64,8 +67,7 @@ func (c *Client) Upload(ctx context.Context, bucket, key string, body io.Reader)
 	return nil
 }
 
-// Download downloads a file from S3
-func (c *Client) Download(ctx context.Context, bucket, key string, writer io.WriterAt) error {
+func (c *client) Download(ctx context.Context, bucket, key string, writer io.WriterAt) error {
 	_, err := c.downloader.Download(ctx, writer, &s3.GetObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
@@ -76,8 +78,7 @@ func (c *Client) Download(ctx context.Context, bucket, key string, writer io.Wri
 	return nil
 }
 
-// GetObject gets an object from S3
-func (c *Client) GetObject(ctx context.Context, bucket, key string) (io.ReadCloser, error) {
+func (c *client) GetObject(ctx context.Context, bucket, key string) (io.ReadCloser, error) {
 	result, err := c.s3Client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
@@ -88,8 +89,7 @@ func (c *Client) GetObject(ctx context.Context, bucket, key string) (io.ReadClos
 	return result.Body, nil
 }
 
-// Delete deletes an object from S3
-func (c *Client) Delete(ctx context.Context, bucket, key string) error {
+func (c *client) Delete(ctx context.Context, bucket, key string) error {
 	_, err := c.s3Client.DeleteObject(ctx, &s3.DeleteObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
@@ -100,8 +100,7 @@ func (c *Client) Delete(ctx context.Context, bucket, key string) error {
 	return nil
 }
 
-// DeleteMultiple deletes multiple objects from S3
-func (c *Client) DeleteMultiple(ctx context.Context, bucket string, keys []string) error {
+func (c *client) DeleteMultiple(ctx context.Context, bucket string, keys []string) error {
 	objects := make([]s3Types.ObjectIdentifier, len(keys))
 	for i, key := range keys {
 		objects[i] = s3Types.ObjectIdentifier{
@@ -121,8 +120,7 @@ func (c *Client) DeleteMultiple(ctx context.Context, bucket string, keys []strin
 	return nil
 }
 
-// GeneratePresignedURL generates a presigned URL for downloading
-func (c *Client) GeneratePresignedURL(ctx context.Context, bucket, key string, expiration time.Duration) (string, error) {
+func (c *client) GeneratePresignedURL(ctx context.Context, bucket, key string, expiration time.Duration) (string, error) {
 	presignClient := s3.NewPresignClient(c.s3Client)
 
 	presignedReq, err := presignClient.PresignGetObject(ctx, &s3.GetObjectInput{
@@ -138,8 +136,7 @@ func (c *Client) GeneratePresignedURL(ctx context.Context, bucket, key string, e
 	return presignedReq.URL, nil
 }
 
-// ListObjects lists objects in a bucket with a prefix
-func (c *Client) ListObjects(ctx context.Context, bucket, prefix string) ([]string, error) {
+func (c *client) ListObjects(ctx context.Context, bucket, prefix string) ([]string, error) {
 	result, err := c.s3Client.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
 		Bucket: aws.String(bucket),
 		Prefix: aws.String(prefix),

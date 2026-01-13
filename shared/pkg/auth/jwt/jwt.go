@@ -15,7 +15,7 @@ var (
 
 // Claims represents JWT claims
 type Claims struct {
-	UserID   int    `json:"user_id"`
+	UserID   int64  `json:"user_id"`
 	Username string `json:"username"`
 	Email    string `json:"email"`
 	jwt.RegisteredClaims
@@ -27,24 +27,31 @@ type TokenPair struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
-// JWTManager manages JWT tokens
-type JWTManager struct {
+type JWTManager interface {
+	GenerateAccessToken(userID int64, email string) (string, error)
+	GenerateTokenPair(userID int64, username, email string) (*TokenPair, error)
+	ValidateToken(tokenString string) (*Claims, error)
+}
+
+type jwtManager struct {
 	secret        []byte
 	accessExpiry  time.Duration
 	refreshExpiry time.Duration
 }
 
-// NewJWTManager creates a new JWT manager
-func NewJWTManager(secret string, accessExpiry, refreshExpiry time.Duration) *JWTManager {
-	return &JWTManager{
+func NewJWTManager(secret string, accessExpiry, refreshExpiry time.Duration) JWTManager {
+	return &jwtManager{
 		secret:        []byte(secret),
 		accessExpiry:  accessExpiry,
 		refreshExpiry: refreshExpiry,
 	}
 }
 
-// GenerateTokenPair generates both access and refresh tokens
-func (m *JWTManager) GenerateTokenPair(userID int, username, email string) (*TokenPair, error) {
+func (m *jwtManager) GenerateAccessToken(userID int64, email string) (string, error) {
+	return m.generateToken(userID, "", email, m.accessExpiry)
+}
+
+func (m *jwtManager) GenerateTokenPair(userID int64, username, email string) (*TokenPair, error) {
 	accessToken, err := m.generateToken(userID, username, email, m.accessExpiry)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate access token: %w", err)
@@ -61,8 +68,7 @@ func (m *JWTManager) GenerateTokenPair(userID int, username, email string) (*Tok
 	}, nil
 }
 
-// generateToken generates a JWT token
-func (m *JWTManager) generateToken(userID int, username, email string, expiry time.Duration) (string, error) {
+func (m *jwtManager) generateToken(userID int64, username, email string, expiry time.Duration) (string, error) {
 	now := time.Now()
 	claims := &Claims{
 		UserID:   userID,
@@ -79,8 +85,7 @@ func (m *JWTManager) generateToken(userID int, username, email string, expiry ti
 	return token.SignedString(m.secret)
 }
 
-// ValidateToken validates a JWT token and returns the claims
-func (m *JWTManager) ValidateToken(tokenString string) (*Claims, error) {
+func (m *jwtManager) ValidateToken(tokenString string) (*Claims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
 		// Validate signing method
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
