@@ -62,3 +62,21 @@ func (l *Logger) Fatal(v ...interface{}) {
 func (l *Logger) Fatalf(format string, v ...interface{}) {
 	l.errorLog.Fatalf(format, v...)
 }
+
+var defaultLogger = NewLogger("app")
+
+func Info(msg string, args ...interface{}) {
+	defaultLogger.Infof("%s %v", msg, args)
+}
+
+func Error(msg string, args ...interface{}) {
+	defaultLogger.Errorf("%s %v", msg, args)
+}
+
+func Warn(msg string, args ...interface{}) {
+	defaultLogger.Warnf("%s %v", msg, args)
+}
+
+func Fatal(msg string, args ...interface{}) {
+	defaultLogger.Fatalf("%s %v", msg, args)
+}

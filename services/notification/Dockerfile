@@ -1,0 +1,22 @@
+FROM golang:1.24-alpine AS builder
+
+WORKDIR /app
+
+COPY go.work go.work.sum ./
+COPY shared/ shared/
+COPY services/notification/ services/notification/
+
+WORKDIR /app/services/notification
+
+RUN go mod download
+RUN CGO_ENABLED=0 GOOS=linux go build -o /notification-service cmd/worker/main.go
+
+FROM alpine:latest
+
+RUN apk --no-cache add ca-certificates
+
+WORKDIR /root/
+
+COPY --from=builder /notification-service .
+
+CMD ["./notification-service"]
