@@ -1,4 +1,4 @@
-import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
+import { createFileRoute, Link, Outlet, redirect, useNavigate } from '@tanstack/react-router';
 import { Button } from '@/components/ui/button';
 import { getCurrentUser, isAuthenticated, useLogout } from '@/hooks/use-auth';
 
@@ -14,10 +14,11 @@ export const Route = createFileRoute('/_protected')({
 function ProtectedLayout() {
   const logout = useLogout();
   const user = getCurrentUser();
+  const navigate = useNavigate();
 
   const handleLogout = async () => {
     await logout.mutateAsync();
-    window.location.href = '/login';
+    navigate({ to: '/login' });
   };
 
   return (
@@ -27,12 +28,12 @@ function ProtectedLayout() {
           <div className="flex items-center gap-8">
             <h1 className="text-xl font-bold">Video Processing Platform</h1>
             <nav className="flex gap-4">
-              <a href="/videos" className="text-sm font-medium hover:underline">
+              <Link to="/videos" className="text-sm font-medium hover:underline">
                 Videos
-              </a>
-              <a href="/upload" className="text-sm font-medium hover:underline">
+              </Link>
+              <Link to="/upload" className="text-sm font-medium hover:underline">
                 Upload
-              </a>
+              </Link>
             </nav>
           </div>
           <div className="flex items-center gap-4">

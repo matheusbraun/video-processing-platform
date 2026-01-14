@@ -1,3 +1,4 @@
+import { Link, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,6 +13,7 @@ export function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const register = useRegister();
+  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,7 +31,7 @@ export function RegisterPage() {
 
     try {
       await register.mutateAsync({ username, email, password });
-      window.location.href = '/login';
+      navigate({ to: '/login' });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed');
     }
@@ -96,9 +98,9 @@ export function RegisterPage() {
             </Button>
             <div className="text-center text-sm">
               Already have an account?{' '}
-              <a href="/login" className="text-blue-600 hover:underline">
+              <Link to="/login" className="text-blue-600 hover:underline">
                 Login
-              </a>
+              </Link>
             </div>
           </form>
         </CardContent>
