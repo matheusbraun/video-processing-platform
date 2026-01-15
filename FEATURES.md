@@ -261,25 +261,26 @@ Microservices-based video processing platform that extracts frames from videos a
 - [x] Integrated QueryClientProvider with RouterProvider
 - [x] Generated route tree automatically
 
-### 7.4 Video Pages
-- [ ] **UploadPage** - Drag-and-drop upload with progress
-- [ ] **VideosPage** - List videos with status badges
-- [ ] **VideoDetailPage** - View video details and download
+### 7.4 Video Pages ✅
+- [x] **UploadPage** - Drag-and-drop upload with progress and file info
+- [x] **VideosPage** - List videos with status badges and responsive grid
+- [x] **VideoDetailPage** - View video details, auto-refresh status, and download ZIP
 
-### 7.5 Components
-- [ ] Install shadcn/ui components:
-  - [ ] Button, Input, Card, Badge
-  - [ ] Alert, Toast, Dialog
-  - [ ] DropdownMenu, Table
-- [ ] Create VideoCard component
-- [ ] Create UploadZone component
-- [ ] Create StatusBadge component
-- [ ] Create Header/Navigation component
+### 7.5 Components ✅
+- [x] Install shadcn/ui components:
+  - [x] Button, Input, Card, Badge, Label (installed in 7.3)
+  - [x] Alert, Sonner (toast replacement), Dialog
+  - [x] DropdownMenu, Table, Progress
+- [x] Create VideoCard component - Shows video info with status badge and view details button
+- [x] Create UploadZone component - Drag-and-drop with file input fallback and progress bar
+- [x] Create StatusBadge component - Color-coded status badges for video states
+- [x] Header/Navigation component - Already implemented in ProtectedLayout (7.3)
 
-### 7.6 Deployment
-- [ ] Create multi-stage Dockerfile
-- [ ] Configure Nginx for SPA routing
-- [ ] Set up environment variables for API URL
+### 7.6 Deployment ✅
+- [x] Create multi-stage Dockerfile - Uses Bun for build, Nginx Alpine for serving
+- [x] Configure Nginx for SPA routing - Handles all routes, gzip compression, security headers, static asset caching
+- [x] Set up environment variables for API URL - VITE_API_URL with .env.example
+- [x] Create .dockerignore for optimized builds
 
 ### 7.7 Testing
 - [ ] E2E tests with Playwright
@@ -317,7 +318,6 @@ Microservices-based video processing platform that extracts frames from videos a
 ### 9.1 Backend Testing
 - [ ] Unit tests for all use cases (target 80%+ coverage)
 - [ ] Integration tests with testcontainers
-- [ ] BDD tests with Godog/Cucumber
 - [ ] Contract tests for inter-service communication
 
 ### 9.2 Frontend Testing

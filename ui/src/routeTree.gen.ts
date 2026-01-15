@@ -8,78 +8,93 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from './routes/__root';
-import { Route as ProtectedRouteImport } from './routes/_protected';
-import { Route as AuthRouteImport } from './routes/_auth';
-import { Route as IndexRouteImport } from './routes/index';
-import { Route as ProtectedVideosRouteImport } from './routes/_protected/videos';
-import { Route as ProtectedUploadRouteImport } from './routes/_protected/upload';
-import { Route as AuthRegisterRouteImport } from './routes/_auth/register';
-import { Route as AuthLoginRouteImport } from './routes/_auth/login';
+import { Route as rootRouteImport } from './routes/__root'
+import { Route as ProtectedRouteImport } from './routes/_protected'
+import { Route as AuthRouteImport } from './routes/_auth'
+import { Route as IndexRouteImport } from './routes/index'
+import { Route as ProtectedVideosRouteImport } from './routes/_protected/videos'
+import { Route as ProtectedUploadRouteImport } from './routes/_protected/upload'
+import { Route as AuthRegisterRouteImport } from './routes/_auth/register'
+import { Route as AuthLoginRouteImport } from './routes/_auth/login'
+import { Route as ProtectedVideosVideoIdRouteImport } from './routes/_protected/videos.$videoId'
 
 const ProtectedRoute = ProtectedRouteImport.update({
   id: '/_protected',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const AuthRoute = AuthRouteImport.update({
   id: '/_auth',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const ProtectedVideosRoute = ProtectedVideosRouteImport.update({
   id: '/videos',
   path: '/videos',
   getParentRoute: () => ProtectedRoute,
-} as any);
+} as any)
 const ProtectedUploadRoute = ProtectedUploadRouteImport.update({
   id: '/upload',
   path: '/upload',
   getParentRoute: () => ProtectedRoute,
-} as any);
+} as any)
 const AuthRegisterRoute = AuthRegisterRouteImport.update({
   id: '/register',
   path: '/register',
   getParentRoute: () => AuthRoute,
-} as any);
+} as any)
 const AuthLoginRoute = AuthLoginRouteImport.update({
   id: '/login',
   path: '/login',
   getParentRoute: () => AuthRoute,
-} as any);
+} as any)
+const ProtectedVideosVideoIdRoute = ProtectedVideosVideoIdRouteImport.update({
+  id: '/$videoId',
+  path: '/$videoId',
+  getParentRoute: () => ProtectedVideosRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute;
-  '/login': typeof AuthLoginRoute;
-  '/register': typeof AuthRegisterRoute;
-  '/upload': typeof ProtectedUploadRoute;
-  '/videos': typeof ProtectedVideosRoute;
+  '/': typeof IndexRoute
+  '/login': typeof AuthLoginRoute
+  '/register': typeof AuthRegisterRoute
+  '/upload': typeof ProtectedUploadRoute
+  '/videos': typeof ProtectedVideosRouteWithChildren
+  '/videos/$videoId': typeof ProtectedVideosVideoIdRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute;
-  '/login': typeof AuthLoginRoute;
-  '/register': typeof AuthRegisterRoute;
-  '/upload': typeof ProtectedUploadRoute;
-  '/videos': typeof ProtectedVideosRoute;
+  '/': typeof IndexRoute
+  '/login': typeof AuthLoginRoute
+  '/register': typeof AuthRegisterRoute
+  '/upload': typeof ProtectedUploadRoute
+  '/videos': typeof ProtectedVideosRouteWithChildren
+  '/videos/$videoId': typeof ProtectedVideosVideoIdRoute
 }
 export interface FileRoutesById {
-  __root__: typeof rootRouteImport;
-  '/': typeof IndexRoute;
-  '/_auth': typeof AuthRouteWithChildren;
-  '/_protected': typeof ProtectedRouteWithChildren;
-  '/_auth/login': typeof AuthLoginRoute;
-  '/_auth/register': typeof AuthRegisterRoute;
-  '/_protected/upload': typeof ProtectedUploadRoute;
-  '/_protected/videos': typeof ProtectedVideosRoute;
+  __root__: typeof rootRouteImport
+  '/': typeof IndexRoute
+  '/_auth': typeof AuthRouteWithChildren
+  '/_protected': typeof ProtectedRouteWithChildren
+  '/_auth/login': typeof AuthLoginRoute
+  '/_auth/register': typeof AuthRegisterRoute
+  '/_protected/upload': typeof ProtectedUploadRoute
+  '/_protected/videos': typeof ProtectedVideosRouteWithChildren
+  '/_protected/videos/$videoId': typeof ProtectedVideosVideoIdRoute
 }
 export interface FileRouteTypes {
-  fileRoutesByFullPath: FileRoutesByFullPath;
-  fullPaths: '/' | '/login' | '/register' | '/upload' | '/videos';
-  fileRoutesByTo: FileRoutesByTo;
-  to: '/' | '/login' | '/register' | '/upload' | '/videos';
+  fileRoutesByFullPath: FileRoutesByFullPath
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/register'
+    | '/upload'
+    | '/videos'
+    | '/videos/$videoId'
+  fileRoutesByTo: FileRoutesByTo
+  to: '/' | '/login' | '/register' | '/upload' | '/videos' | '/videos/$videoId'
   id:
     | '__root__'
     | '/'
@@ -88,98 +103,120 @@ export interface FileRouteTypes {
     | '/_auth/login'
     | '/_auth/register'
     | '/_protected/upload'
-    | '/_protected/videos';
-  fileRoutesById: FileRoutesById;
+    | '/_protected/videos'
+    | '/_protected/videos/$videoId'
+  fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute;
-  AuthRoute: typeof AuthRouteWithChildren;
-  ProtectedRoute: typeof ProtectedRouteWithChildren;
+  IndexRoute: typeof IndexRoute
+  AuthRoute: typeof AuthRouteWithChildren
+  ProtectedRoute: typeof ProtectedRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
     '/_protected': {
-      id: '/_protected';
-      path: '';
-      fullPath: '';
-      preLoaderRoute: typeof ProtectedRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
+      id: '/_protected'
+      path: ''
+      fullPath: ''
+      preLoaderRoute: typeof ProtectedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_auth': {
-      id: '/_auth';
-      path: '';
-      fullPath: '';
-      preLoaderRoute: typeof AuthRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
+      id: '/_auth'
+      path: ''
+      fullPath: ''
+      preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
-      id: '/';
-      path: '/';
-      fullPath: '/';
-      preLoaderRoute: typeof IndexRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_protected/videos': {
-      id: '/_protected/videos';
-      path: '/videos';
-      fullPath: '/videos';
-      preLoaderRoute: typeof ProtectedVideosRouteImport;
-      parentRoute: typeof ProtectedRoute;
-    };
+      id: '/_protected/videos'
+      path: '/videos'
+      fullPath: '/videos'
+      preLoaderRoute: typeof ProtectedVideosRouteImport
+      parentRoute: typeof ProtectedRoute
+    }
     '/_protected/upload': {
-      id: '/_protected/upload';
-      path: '/upload';
-      fullPath: '/upload';
-      preLoaderRoute: typeof ProtectedUploadRouteImport;
-      parentRoute: typeof ProtectedRoute;
-    };
+      id: '/_protected/upload'
+      path: '/upload'
+      fullPath: '/upload'
+      preLoaderRoute: typeof ProtectedUploadRouteImport
+      parentRoute: typeof ProtectedRoute
+    }
     '/_auth/register': {
-      id: '/_auth/register';
-      path: '/register';
-      fullPath: '/register';
-      preLoaderRoute: typeof AuthRegisterRouteImport;
-      parentRoute: typeof AuthRoute;
-    };
+      id: '/_auth/register'
+      path: '/register'
+      fullPath: '/register'
+      preLoaderRoute: typeof AuthRegisterRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_auth/login': {
-      id: '/_auth/login';
-      path: '/login';
-      fullPath: '/login';
-      preLoaderRoute: typeof AuthLoginRouteImport;
-      parentRoute: typeof AuthRoute;
-    };
+      id: '/_auth/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof AuthLoginRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/_protected/videos/$videoId': {
+      id: '/_protected/videos/$videoId'
+      path: '/$videoId'
+      fullPath: '/videos/$videoId'
+      preLoaderRoute: typeof ProtectedVideosVideoIdRouteImport
+      parentRoute: typeof ProtectedVideosRoute
+    }
   }
 }
 
 interface AuthRouteChildren {
-  AuthLoginRoute: typeof AuthLoginRoute;
-  AuthRegisterRoute: typeof AuthRegisterRoute;
+  AuthLoginRoute: typeof AuthLoginRoute
+  AuthRegisterRoute: typeof AuthRegisterRoute
 }
 
 const AuthRouteChildren: AuthRouteChildren = {
   AuthLoginRoute: AuthLoginRoute,
   AuthRegisterRoute: AuthRegisterRoute,
-};
+}
 
-const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren);
+const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)
+
+interface ProtectedVideosRouteChildren {
+  ProtectedVideosVideoIdRoute: typeof ProtectedVideosVideoIdRoute
+}
+
+const ProtectedVideosRouteChildren: ProtectedVideosRouteChildren = {
+  ProtectedVideosVideoIdRoute: ProtectedVideosVideoIdRoute,
+}
+
+const ProtectedVideosRouteWithChildren = ProtectedVideosRoute._addFileChildren(
+  ProtectedVideosRouteChildren,
+)
 
 interface ProtectedRouteChildren {
-  ProtectedUploadRoute: typeof ProtectedUploadRoute;
-  ProtectedVideosRoute: typeof ProtectedVideosRoute;
+  ProtectedUploadRoute: typeof ProtectedUploadRoute
+  ProtectedVideosRoute: typeof ProtectedVideosRouteWithChildren
 }
 
 const ProtectedRouteChildren: ProtectedRouteChildren = {
   ProtectedUploadRoute: ProtectedUploadRoute,
-  ProtectedVideosRoute: ProtectedVideosRoute,
-};
+  ProtectedVideosRoute: ProtectedVideosRouteWithChildren,
+}
 
-const ProtectedRouteWithChildren = ProtectedRoute._addFileChildren(ProtectedRouteChildren);
+const ProtectedRouteWithChildren = ProtectedRoute._addFileChildren(
+  ProtectedRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRouteWithChildren,
   ProtectedRoute: ProtectedRouteWithChildren,
-};
+}
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
-  ._addFileTypes<FileRouteTypes>();
+  ._addFileTypes<FileRouteTypes>()
