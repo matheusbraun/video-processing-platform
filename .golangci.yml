@@ -1,0 +1,79 @@
+run:
+  timeout: 5m
+  tests: true
+  modules-download-mode: readonly
+
+linters:
+  enable:
+    - errcheck        # Check for unchecked errors
+    - gosimple        # Simplify code
+    - govet           # Vet examines Go source code
+    - ineffassign     # Detect ineffectual assignments
+    - staticcheck     # Staticcheck is go vet on steroids
+    - unused          # Check for unused constants, variables, functions
+    - gofmt           # Check formatting
+    - goimports       # Check import ordering
+    - misspell        # Find commonly misspelled words
+    - revive          # Fast, configurable, extensible linter
+    - gosec           # Security-focused linter
+    - gocritic        # Opinionated Go linter
+    - bodyclose       # Check HTTP response body is closed
+    - noctx           # Check HTTP requests use context
+    - errorlint       # Find misuses of errors
+    - exhaustive      # Check exhaustiveness of enum switch statements
+    - gocyclo         # Compute cyclomatic complexity
+    - nestif          # Check deeply nested if statements
+    - prealloc        # Find slice declarations that could be preallocated
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+
+  govet:
+    check-shadowing: true
+    enable-all: true
+
+  gocyclo:
+    min-complexity: 15
+
+  nestif:
+    min-complexity: 5
+
+  gosec:
+    excludes:
+      - G104 # Audit errors not checked (covered by errcheck)
+      - G304 # File path provided as taint input (false positives in config loading)
+
+  revive:
+    rules:
+      - name: exported
+        disabled: false
+      - name: var-naming
+        disabled: false
+      - name: package-comments
+        disabled: true # Not all packages need comments
+
+issues:
+  exclude-use-default: false
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+  exclude-rules:
+    # Exclude some linters from test files
+    - path: _test\.go
+      linters:
+        - gocyclo
+        - errcheck
+        - gosec
+
+    # Exclude main.go from requiring package comments
+    - path: cmd/.*main\.go
+      linters:
+        - revive
+      text: "package-comments"
+
+output:
+  format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true

@@ -1,0 +1,162 @@
+name: Deploy to Environment
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      tag:
+        description: 'Docker image tag to deploy'
+        required: true
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository }}
+
+jobs:
+  deploy:
+    name: Deploy to ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add server to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to server
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          IMAGE_TAG: ${{ inputs.tag }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+          RABBITMQ_URL: ${{ secrets.RABBITMQ_URL }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          S3_UPLOADS_BUCKET: ${{ secrets.S3_UPLOADS_BUCKET }}
+          S3_PROCESSED_BUCKET: ${{ secrets.S3_PROCESSED_BUCKET }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+        run: |
+          ssh $SERVER_USER@$SERVER_HOST << 'EOF'
+            cd /opt/video-platform
+
+            # Pull latest images
+            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/auth:${{ env.IMAGE_TAG }}
+            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/api-gateway:${{ env.IMAGE_TAG }}
+            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/processing-worker:${{ env.IMAGE_TAG }}
+            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/storage:${{ env.IMAGE_TAG }}
+            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/notification:${{ env.IMAGE_TAG }}
+            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/cleanup-cron:${{ env.IMAGE_TAG }}
+            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/ui:${{ env.IMAGE_TAG }}
+
+            # Update environment variables
+            cat > .env << 'ENVEOF'
+          DATABASE_URL=${{ env.DATABASE_URL }}
+          REDIS_URL=${{ env.REDIS_URL }}
+          RABBITMQ_URL=${{ env.RABBITMQ_URL }}
+          JWT_SECRET=${{ env.JWT_SECRET }}
+          AWS_REGION=${{ env.AWS_REGION }}
+          AWS_ACCESS_KEY_ID=${{ env.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY=${{ env.AWS_SECRET_ACCESS_KEY }}
+          S3_UPLOADS_BUCKET=${{ env.S3_UPLOADS_BUCKET }}
+          S3_PROCESSED_BUCKET=${{ env.S3_PROCESSED_BUCKET }}
+          SMTP_HOST=${{ env.SMTP_HOST }}
+          SMTP_PORT=${{ env.SMTP_PORT }}
+          SMTP_USER=${{ env.SMTP_USER }}
+          SMTP_PASSWORD=${{ env.SMTP_PASSWORD }}
+          IMAGE_TAG=${{ env.IMAGE_TAG }}
+          ENVEOF
+
+            # Deploy with docker-compose
+            docker-compose -f deployment/docker-compose.yml pull
+            docker-compose -f deployment/docker-compose.yml up -d
+
+            # Wait for services to be healthy
+            sleep 10
+            docker-compose -f deployment/docker-compose.yml ps
+          EOF
+
+      - name: Verify deployment
+        run: |
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
+            cd /opt/video-platform
+
+            # Check service health
+            services=("auth-service" "api-gateway" "processing-worker" "storage-service" "notification-service" "ui")
+
+            for service in "${services[@]}"; do
+              if ! docker ps --filter "name=video-platform-$service" --filter "status=running" | grep -q $service; then
+                echo "ERROR: $service is not running"
+                exit 1
+              fi
+              echo "✓ $service is running"
+            done
+
+            echo "All services deployed successfully!"
+          EOF
+
+      - name: Run smoke tests
+        run: |
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
+            # Wait for services to fully start
+            sleep 20
+
+            # Test API Gateway health
+            if ! curl -f http://localhost:8080/health > /dev/null 2>&1; then
+              echo "ERROR: API Gateway health check failed"
+              exit 1
+            fi
+            echo "✓ API Gateway health check passed"
+
+            # Test Auth Service
+            if ! curl -f http://localhost:8081/health > /dev/null 2>&1; then
+              echo "ERROR: Auth Service health check failed"
+              exit 1
+            fi
+            echo "✓ Auth Service health check passed"
+
+            # Test UI
+            if ! curl -f http://localhost:3000 > /dev/null 2>&1; then
+              echo "ERROR: UI health check failed"
+              exit 1
+            fi
+            echo "✓ UI health check passed"
+
+            echo "All smoke tests passed!"
+          EOF
+
+      - name: Notify deployment success
+        if: success()
+        run: |
+          echo "✅ Successfully deployed to ${{ inputs.environment }} with tag ${{ inputs.tag }}"
+
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
+            cd /opt/video-platform
+            echo "Deployment failed, rolling back..."
+            docker-compose -f deployment/docker-compose.yml down
+            # Restore previous version (implement your rollback strategy here)
+            echo "Please manually verify and restore previous version"
+          EOF
