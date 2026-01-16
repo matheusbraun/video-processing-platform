@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   # PostgreSQL Database
@@ -206,18 +206,22 @@ services:
   # Cleanup Cron Job
   cleanup-cron:
     build:
-      context: ../scripts
-      dockerfile: Dockerfile.cleanup
+      context: ..
+      dockerfile: services/processing-worker/Dockerfile.cleanup
     container_name: video-platform-cleanup
     environment:
       DATABASE_URL: postgres://videoadmin:secret@postgres:5432/video_platform?sslmode=disable
+      RABBITMQ_URL: amqp://video:secret@rabbitmq:5672/
       AWS_REGION: ${AWS_REGION:-us-east-1}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       S3_UPLOADS_BUCKET: ${S3_UPLOADS_BUCKET:-video-platform-uploads}
       S3_PROCESSED_BUCKET: ${S3_PROCESSED_BUCKET:-video-platform-processed}
+      TZ: ${TZ:-UTC}
     depends_on:
       postgres:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
     networks:
       - video-platform

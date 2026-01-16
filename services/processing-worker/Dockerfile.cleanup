@@ -1,0 +1,46 @@
+# Stage 1: Build the cleanup binary
+FROM golang:1.24.3-alpine AS builder
+
+WORKDIR /app
+
+# Copy go workspace files
+COPY go.work go.work.sum ./
+
+# Copy shared module
+COPY shared/ ./shared/
+
+# Copy processing-worker service
+COPY services/processing-worker/ ./services/processing-worker/
+
+WORKDIR /app/services/processing-worker
+
+# Download dependencies
+RUN go mod download
+
+# Build the cleanup binary
+RUN CGO_ENABLED=0 GOOS=linux go build -o /app/cleanup ./cmd/cleanup
+
+# Stage 2: Create cron job image
+FROM alpine:3.19
+
+# Install supercronic (better cron for containers)
+ENV SUPERCRONIC_URL=https://github.com/aptible/supercronic/releases/download/v0.2.29/supercronic-linux-amd64 \
+    SUPERCRONIC=supercronic-linux-amd64 \
+    SUPERCRONIC_SHA1SUM=cd48d45c4b10f3f0bfdd3a57d054cd05ac96812b
+
+RUN wget "$SUPERCRONIC_URL" \
+    && echo "${SUPERCRONIC_SHA1SUM}  ${SUPERCRONIC}" | sha1sum -c - \
+    && chmod +x "$SUPERCRONIC" \
+    && mv "$SUPERCRONIC" /usr/local/bin/supercronic
+
+# Copy the cleanup binary from builder
+COPY --from=builder /app/cleanup /usr/local/bin/cleanup
+
+# Copy crontab file
+COPY services/processing-worker/crontab /etc/crontab
+
+# Set timezone (optional, defaults to UTC)
+ENV TZ=UTC
+
+# Run supercronic
+CMD ["supercronic", "/etc/crontab"]
