@@ -1,0 +1,86 @@
+{
+  "dashboard": {
+    "title": "Video Platform - Video Processing",
+    "tags": ["video-platform", "processing"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Queue Depth",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rabbitmq_queue_messages_ready",
+            "legendFormat": "{{ queue }}"
+          }
+        ],
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 }
+      },
+      {
+        "id": 2,
+        "title": "Queue Processing Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "sum(rate(queue_messages_processed_total[5m])) by (queue, status)",
+            "legendFormat": "{{ queue }} - {{ status }}"
+          }
+        ],
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 }
+      },
+      {
+        "id": 3,
+        "title": "Video Processing Duration (P95)",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(video_processing_duration_seconds_bucket[5m])) by (operation, le))",
+            "legendFormat": "{{ operation }}"
+          }
+        ],
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 }
+      },
+      {
+        "id": 4,
+        "title": "Videos by Status",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "sum(rate(videos_total[5m])) by (status)",
+            "legendFormat": "{{ status }}"
+          }
+        ],
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 }
+      },
+      {
+        "id": 5,
+        "title": "Frames Extracted Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(frames_extracted_total[5m])",
+            "legendFormat": "Frames/sec"
+          }
+        ],
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 }
+      },
+      {
+        "id": 6,
+        "title": "Email Sending Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "sum(rate(emails_sent_total[5m])) by (status)",
+            "legendFormat": "{{ status }}"
+          }
+        ],
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 }
+      }
+    ],
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    }
+  }
+}

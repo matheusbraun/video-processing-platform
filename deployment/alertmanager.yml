@@ -1,0 +1,67 @@
+global:
+  resolve_timeout: 5m
+  smtp_smarthost: '${SMTP_HOST:-smtp.gmail.com}:${SMTP_PORT:-587}'
+  smtp_from: '${SMTP_USER}'
+  smtp_auth_username: '${SMTP_USER}'
+  smtp_auth_password: '${SMTP_PASSWORD}'
+
+route:
+  group_by: ['alertname', 'service']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 12h
+  receiver: 'email-notifications'
+  routes:
+    - match:
+        severity: critical
+      receiver: 'email-critical'
+      continue: true
+    - match:
+        severity: warning
+      receiver: 'email-warnings'
+
+receivers:
+  - name: 'email-notifications'
+    email_configs:
+      - to: '${ALERT_EMAIL:-admin@example.com}'
+        headers:
+          Subject: '[Video Platform] {{ .GroupLabels.alertname }}'
+        html: |
+          <h2>Alert: {{ .GroupLabels.alertname }}</h2>
+          <p><strong>Severity:</strong> {{ .CommonLabels.severity }}</p>
+          <p><strong>Summary:</strong> {{ .CommonAnnotations.summary }}</p>
+          <p><strong>Description:</strong> {{ .CommonAnnotations.description }}</p>
+          <p><strong>Time:</strong> {{ .StartsAt }}</p>
+
+  - name: 'email-critical'
+    email_configs:
+      - to: '${ALERT_EMAIL:-admin@example.com}'
+        headers:
+          Subject: '[CRITICAL] [Video Platform] {{ .GroupLabels.alertname }}'
+        html: |
+          <h1 style="color: red;">CRITICAL ALERT</h1>
+          <h2>{{ .GroupLabels.alertname }}</h2>
+          <p><strong>Service:</strong> {{ .GroupLabels.service }}</p>
+          <p><strong>Summary:</strong> {{ .CommonAnnotations.summary }}</p>
+          <p><strong>Description:</strong> {{ .CommonAnnotations.description }}</p>
+          <p><strong>Time:</strong> {{ .StartsAt }}</p>
+
+  - name: 'email-warnings'
+    email_configs:
+      - to: '${ALERT_EMAIL:-admin@example.com}'
+        headers:
+          Subject: '[WARNING] [Video Platform] {{ .GroupLabels.alertname }}'
+        html: |
+          <h2 style="color: orange;">Warning</h2>
+          <h3>{{ .GroupLabels.alertname }}</h3>
+          <p><strong>Service:</strong> {{ .GroupLabels.service }}</p>
+          <p><strong>Summary:</strong> {{ .CommonAnnotations.summary }}</p>
+          <p><strong>Description:</strong> {{ .CommonAnnotations.description }}</p>
+          <p><strong>Time:</strong> {{ .StartsAt }}</p>
+
+inhibit_rules:
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'service']

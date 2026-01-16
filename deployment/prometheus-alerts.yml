@@ -1,0 +1,121 @@
+groups:
+  - name: video-platform-alerts
+    interval: 30s
+    rules:
+      # High error rate
+      - alert: HighHTTPErrorRate
+        expr: |
+          sum(rate(http_requests_total{status_code=~"5.."}[5m])) by (service)
+          /
+          sum(rate(http_requests_total[5m])) by (service)
+          > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High HTTP error rate on {{ $labels.service }}"
+          description: "{{ $labels.service }} has {{ $value | humanizePercentage }} error rate"
+
+      # High request latency
+      - alert: HighRequestLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (service, le)
+          ) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High request latency on {{ $labels.service }}"
+          description: "{{ $labels.service }} P95 latency is {{ $value }}s"
+
+      # Service down
+      - alert: ServiceDown
+        expr: up{job=~"auth-service|api-gateway|storage-service|notification-service|processing-worker"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "{{ $labels.job }} has been down for more than 2 minutes"
+
+      # High queue depth
+      - alert: HighQueueDepth
+        expr: rabbitmq_queue_messages_ready > 1000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High queue depth in {{ $labels.queue }}"
+          description: "Queue {{ $labels.queue }} has {{ $value }} messages pending"
+
+      # Database connection pool exhaustion
+      - alert: DatabaseConnectionPoolNearlyExhausted
+        expr: db_connections_open / 100 > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Database connection pool nearly exhausted on {{ $labels.service }}"
+          description: "{{ $labels.service }} is using {{ $value | humanizePercentage }} of connection pool"
+
+      # Video processing failures
+      - alert: HighVideoProcessingFailureRate
+        expr: |
+          sum(rate(videos_total{status="FAILED"}[10m])) by (service)
+          /
+          sum(rate(videos_total[10m])) by (service)
+          > 0.1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High video processing failure rate"
+          description: "{{ $value | humanizePercentage }} of videos are failing to process"
+
+      # Email sending failures
+      - alert: HighEmailFailureRate
+        expr: |
+          sum(rate(emails_sent_total{status="FAILED"}[5m]))
+          /
+          sum(rate(emails_sent_total[5m]))
+          > 0.2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High email sending failure rate"
+          description: "{{ $value | humanizePercentage }} of emails are failing to send"
+
+      # Disk space low
+      - alert: DiskSpaceLow
+        expr: |
+          (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 10
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Disk space low on {{ $labels.instance }}"
+          description: "Only {{ $value }}% disk space remaining"
+
+      # High CPU usage
+      - alert: HighCPUUsage
+        expr: |
+          100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is {{ $value }}%"
+
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: |
+          (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory usage is {{ $value }}%"

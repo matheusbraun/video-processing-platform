@@ -227,10 +227,103 @@ services:
       - video-platform
     restart: unless-stopped
 
+  # Prometheus - Metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: video-platform-prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/etc/prometheus/console_libraries"
+      - "--web.console.templates=/etc/prometheus/consoles"
+      - "--web.enable-lifecycle"
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus-alerts.yml:/etc/prometheus/alerts.yml
+      - prometheus_data:/prometheus
+    networks:
+      - video-platform
+    restart: unless-stopped
+
+  # Grafana - Metrics visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: video-platform-grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana-datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml
+      - ./grafana-dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml
+      - ./grafana-dashboard-system-overview.json:/etc/grafana/provisioning/dashboards/system-overview.json
+      - ./grafana-dashboard-video-processing.json:/etc/grafana/provisioning/dashboards/video-processing.json
+      - ./grafana-dashboard-database.json:/etc/grafana/provisioning/dashboards/database.json
+      - ./grafana-dashboard-infrastructure.json:/etc/grafana/provisioning/dashboards/infrastructure.json
+    depends_on:
+      - prometheus
+    networks:
+      - video-platform
+    restart: unless-stopped
+
+  # Alertmanager - Alert routing and notification
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: video-platform-alertmanager
+    command:
+      - "--config.file=/etc/alertmanager/config.yml"
+      - "--storage.path=/alertmanager"
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./alertmanager.yml:/etc/alertmanager/config.yml
+      - alertmanager_data:/alertmanager
+    networks:
+      - video-platform
+    restart: unless-stopped
+
+  # PostgreSQL Exporter - Export PostgreSQL metrics
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: video-platform-postgres-exporter
+    environment:
+      DATA_SOURCE_NAME: postgresql://videoadmin:secret@postgres:5432/video_platform?sslmode=disable
+    ports:
+      - "9187:9187"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - video-platform
+    restart: unless-stopped
+
+  # Redis Exporter - Export Redis metrics
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: video-platform-redis-exporter
+    environment:
+      REDIS_ADDR: redis:6379
+    ports:
+      - "9121:9121"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - video-platform
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   redis_data:
   rabbitmq_data:
+  prometheus_data:
+  grafana_data:
+  alertmanager_data:
 
 networks:
   video-platform:
