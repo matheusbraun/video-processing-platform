@@ -11,7 +11,10 @@
     "format:check": "biome format .",
     "check": "biome check --write .",
     "typecheck": "tsc -b --noEmit",
-    "preview": "bun --bun vite preview"
+    "preview": "bun --bun vite preview",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:headed": "playwright test --headed"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
@@ -29,6 +32,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.11",
+    "@playwright/test": "^1.57.0",
     "@tailwindcss/postcss": "^4",
     "@tanstack/router-devtools": "^1.149.0",
     "@tanstack/router-plugin": "^1.149.0",

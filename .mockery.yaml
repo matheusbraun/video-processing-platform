@@ -1,0 +1,22 @@
+with-expecter: true
+dir: "{{.InterfaceDir}}/mocks"
+mockname: "Mock{{.InterfaceName}}"
+outpkg: mocks
+filename: "mock_{{.InterfaceName | snakecase}}.go"
+packages:
+  github.com/video-platform/services/auth/internal/domain/repositories:
+    interfaces:
+      UserRepository:
+      RefreshTokenRepository:
+  github.com/video-platform/services/api-gateway/internal/domain/repositories:
+    interfaces:
+      VideoRepository:
+  github.com/video-platform/services/processing-worker/internal/domain/repositories:
+    interfaces:
+      VideoRepository:
+  github.com/video-platform/services/storage/internal/domain/repositories:
+    interfaces:
+      VideoRepository:
+  github.com/video-platform/services/notification/internal/domain/repositories:
+    interfaces:
+      NotificationRepository:
