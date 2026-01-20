@@ -49,6 +49,10 @@ func setupTestDatabase(t *testing.T) (*gorm.DB, func()) {
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	require.NoError(t, err)
 
+	// Create schema if it doesn't exist
+	err = db.Exec("CREATE SCHEMA IF NOT EXISTS auth").Error
+	require.NoError(t, err)
+
 	// Run migrations
 	err = db.AutoMigrate(&entities.User{}, &entities.RefreshToken{})
 	require.NoError(t, err)

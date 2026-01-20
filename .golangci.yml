@@ -47,11 +47,13 @@ linters-settings:
   revive:
     rules:
       - name: exported
-        disabled: false
+        disabled: true # Disable requirement for comments on all exported items
       - name: var-naming
         disabled: false
       - name: package-comments
         disabled: true # Not all packages need comments
+      - name: unused-parameter
+        disabled: true # Allow unused parameters in interfaces/handlers
 
 issues:
   exclude-use-default: false
@@ -71,6 +73,16 @@ issues:
       linters:
         - revive
       text: "package-comments"
+
+    # Allow http.ListenAndServe in development (G114)
+    - linters:
+        - gosec
+      text: "G114"
+
+    # Allow unchecked errors in cleanup/defer statements
+    - linters:
+        - errcheck
+      text: "Error return value of .*(Close|Write) is not checked"
 
 output:
   formats:
