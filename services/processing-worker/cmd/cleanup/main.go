@@ -54,7 +54,7 @@ func main() {
 
 	if err != nil {
 		logger.Error("Cleanup job failed", "error", err, "duration_seconds", duration.Seconds())
-		sendNotification(cfg, logger, "FAILED", err, duration, result)
+		sendNotification(ctx, cfg, logger, "FAILED", err, duration, result)
 		os.Exit(1)
 	}
 
@@ -67,11 +67,11 @@ func main() {
 
 	// Send success notification if any videos were deleted
 	if result.VideosDeleted > 0 {
-		sendNotification(cfg, logger, "SUCCESS", nil, duration, result)
+		sendNotification(ctx, cfg, logger, "SUCCESS", nil, duration, result)
 	}
 }
 
-func sendNotification(cfg *config.Config, logger *logging.Logger, status string, err error, duration time.Duration, result *cleanup.CleanupResult) {
+func sendNotification(ctx context.Context, cfg *config.Config, logger *logging.Logger, status string, err error, duration time.Duration, result *cleanup.CleanupResult) {
 	publisher, pubErr := rabbitmq.NewPublisher(cfg.RabbitMQURL)
 	if pubErr != nil {
 		logger.Error("Failed to create RabbitMQ publisher for notification", "error", pubErr)
@@ -117,7 +117,7 @@ func sendNotification(cfg *config.Config, logger *logging.Logger, status string,
 		"body":       body,
 	}
 
-	if notifyErr := publisher.Publish("notifications", event); notifyErr != nil {
+	if notifyErr := publisher.Publish(ctx, "notifications", event); notifyErr != nil {
 		logger.Error("Failed to send notification", "error", notifyErr)
 	} else {
 		logger.Info("Notification sent", "status", status)

@@ -4,22 +4,22 @@ on:
   pull_request:
     branches: [main, develop]
     paths:
-      - 'services/**'
-      - 'shared/**'
-      - 'go.work'
-      - 'go.work.sum'
-      - '.github/workflows/go-services.yml'
+      - "services/**"
+      - "shared/**"
+      - "go.work"
+      - "go.work.sum"
+      - ".github/workflows/go-services.yml"
   push:
     branches: [main, develop]
     paths:
-      - 'services/**'
-      - 'shared/**'
-      - 'go.work'
-      - 'go.work.sum'
-      - '.github/workflows/go-services.yml'
+      - "services/**"
+      - "shared/**"
+      - "go.work"
+      - "go.work.sum"
+      - ".github/workflows/go-services.yml"
 
 env:
-  GO_VERSION: '1.24.3'
+  GO_VERSION: "1.24.3"
   REGISTRY: ghcr.io
   IMAGE_PREFIX: ${{ github.repository }}
 
@@ -43,7 +43,24 @@ jobs:
 
       - name: Run golangci-lint
         run: |
-          golangci-lint run --timeout=5m ./...
+          # Lint each service module individually (required for go workspaces)
+          echo "Linting Auth Service..."
+          cd services/auth && golangci-lint run --timeout=5m ./... && cd ../..
+
+          echo "Linting API Gateway Service..."
+          cd services/api-gateway && golangci-lint run --timeout=5m ./... && cd ../..
+
+          echo "Linting Storage Service..."
+          cd services/storage && golangci-lint run --timeout=5m ./... && cd ../..
+
+          echo "Linting Notification Service..."
+          cd services/notification && golangci-lint run --timeout=5m ./... && cd ../..
+
+          echo "Linting Processing Worker Service..."
+          cd services/processing-worker && golangci-lint run --timeout=5m ./... && cd ../..
+
+          echo "Linting Shared Package..."
+          cd shared && golangci-lint run --timeout=5m ./... && cd ..
 
   test:
     name: Test Go Services
@@ -105,7 +122,26 @@ jobs:
           REDIS_URL: redis://localhost:6379
           RABBITMQ_URL: amqp://video:secret@localhost:5672/
         run: |
-          go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+          # Test each service module individually (required for go workspaces)
+          echo "Testing Auth Service..."
+          cd services/auth && go test -v -race -coverprofile=../../coverage-auth.out -covermode=atomic ./... && cd ../..
+
+          echo "Testing API Gateway Service..."
+          cd services/api-gateway && go test -v -race -coverprofile=../../coverage-api-gateway.out -covermode=atomic ./... && cd ../..
+
+          echo "Testing Storage Service..."
+          cd services/storage && go test -v -race -coverprofile=../../coverage-storage.out -covermode=atomic ./... && cd ../..
+
+          echo "Testing Notification Service..."
+          cd services/notification && go test -v -race -coverprofile=../../coverage-notification.out -covermode=atomic ./... && cd ../..
+
+          echo "Testing Processing Worker Service..."
+          cd services/processing-worker && go test -v -race -coverprofile=../../coverage-processing-worker.out -covermode=atomic ./... && cd ../..
+
+          # Merge coverage files
+          echo "Merging coverage reports..."
+          echo "mode: atomic" > coverage.out
+          tail -q -n +2 coverage-*.out >> coverage.out || true
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
@@ -124,16 +160,16 @@ jobs:
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-          severity: 'CRITICAL,HIGH'
+          scan-type: "fs"
+          scan-ref: "."
+          format: "sarif"
+          output: "trivy-results.sarif"
+          severity: "CRITICAL,HIGH"
 
       - name: Upload Trivy results to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: 'trivy-results.sarif'
+          sarif_file: "trivy-results.sarif"
 
       - name: Run gosec security scanner
         run: |

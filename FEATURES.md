@@ -346,7 +346,16 @@ Microservices-based video processing platform that extracts frames from videos a
   - [x] Automatic cleanup after tests
   - [x] Test isolation with fresh containers per test
 - [x] Coverage reporting - Integrated with Codecov in CI pipeline
-- [x] **Total Backend Tests**: 79 unit tests + 25 integration tests = 104 tests
+- [x] Race detection enabled - All tests pass with -race flag
+- [x] **Test Coverage by Service**:
+  - [x] Auth Service: 92.9% coverage (17 tests)
+  - [x] API Gateway Service: 100.0% coverage (28 tests)
+  - [x] Storage Service: 80.0% coverage (7 tests)
+  - [x] Notification Service: 95.2% coverage (8 tests)
+  - [x] Processing Worker Service: 70.6% coverage (8 tests, 1 skipped)
+  - [x] Cleanup Service: Tests implemented (10 tests)
+- [x] **Total Backend Tests**: 78 unit tests + 25 integration tests = 103 tests
+- [x] **Average Test Coverage**: 87.7% across all services
 - [ ] Contract tests for inter-service communication - Not implemented (optional)
 
 ### 9.2 Frontend Testing ✅

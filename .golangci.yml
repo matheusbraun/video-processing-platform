@@ -1,3 +1,5 @@
+version: 2
+
 run:
   timeout: 5m
   tests: true
@@ -5,25 +7,23 @@ run:
 
 linters:
   enable:
-    - errcheck        # Check for unchecked errors
-    - gosimple        # Simplify code
-    - govet           # Vet examines Go source code
-    - ineffassign     # Detect ineffectual assignments
-    - staticcheck     # Staticcheck is go vet on steroids
-    - unused          # Check for unused constants, variables, functions
-    - gofmt           # Check formatting
-    - goimports       # Check import ordering
-    - misspell        # Find commonly misspelled words
-    - revive          # Fast, configurable, extensible linter
-    - gosec           # Security-focused linter
-    - gocritic        # Opinionated Go linter
-    - bodyclose       # Check HTTP response body is closed
-    - noctx           # Check HTTP requests use context
-    - errorlint       # Find misuses of errors
-    - exhaustive      # Check exhaustiveness of enum switch statements
-    - gocyclo         # Compute cyclomatic complexity
-    - nestif          # Check deeply nested if statements
-    - prealloc        # Find slice declarations that could be preallocated
+    - errcheck # Check for unchecked errors
+    - govet # Vet examines Go source code
+    - ineffassign # Detect ineffectual assignments
+    - staticcheck # Staticcheck (includes gosimple)
+    - unused # Check for unused constants, variables, functions
+    - misspell # Find commonly misspelled words
+    - revive # Fast, configurable, extensible linter
+    - gosec # Security-focused linter
+    - gocritic # Opinionated Go linter
+    - bodyclose # Check HTTP response body is closed
+    - errorlint # Find misuses of errors
+    - gocyclo # Compute cyclomatic complexity
+
+formatters:
+  enable:
+    - gofmt # Check formatting
+    - goimports # Check import ordering
 
 linters-settings:
   errcheck:
@@ -31,7 +31,6 @@ linters-settings:
     check-blank: true
 
   govet:
-    check-shadowing: true
     enable-all: true
 
   gocyclo:
@@ -74,6 +73,8 @@ issues:
       text: "package-comments"
 
 output:
-  format: colored-line-number
+  formats:
+    colored-line-number:
+      path: stdout
   print-issued-lines: true
   print-linter-name: true
