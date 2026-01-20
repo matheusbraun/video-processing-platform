@@ -39,28 +39,30 @@ jobs:
 
       - name: Install golangci-lint
         run: |
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.61.0
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.0.3
 
       - name: Run golangci-lint
         run: |
           # Lint each service module individually (required for go workspaces)
+          set -e
+
           echo "Linting Auth Service..."
-          cd services/auth && golangci-lint run --timeout=5m ./... && cd ../..
+          (cd services/auth && golangci-lint run --timeout=5m ./...)
 
           echo "Linting API Gateway Service..."
-          cd services/api-gateway && golangci-lint run --timeout=5m ./... && cd ../..
+          (cd services/api-gateway && golangci-lint run --timeout=5m ./...)
 
           echo "Linting Storage Service..."
-          cd services/storage && golangci-lint run --timeout=5m ./... && cd ../..
+          (cd services/storage && golangci-lint run --timeout=5m ./...)
 
           echo "Linting Notification Service..."
-          cd services/notification && golangci-lint run --timeout=5m ./... && cd ../..
+          (cd services/notification && golangci-lint run --timeout=5m ./...)
 
           echo "Linting Processing Worker Service..."
-          cd services/processing-worker && golangci-lint run --timeout=5m ./... && cd ../..
+          (cd services/processing-worker && golangci-lint run --timeout=5m ./...)
 
           echo "Linting Shared Package..."
-          cd shared && golangci-lint run --timeout=5m ./... && cd ..
+          (cd shared && golangci-lint run --timeout=5m ./...)
 
   test:
     name: Test Go Services
@@ -123,20 +125,22 @@ jobs:
           RABBITMQ_URL: amqp://video:secret@localhost:5672/
         run: |
           # Test each service module individually (required for go workspaces)
+          set -e
+
           echo "Testing Auth Service..."
-          cd services/auth && go test -v -race -coverprofile=../../coverage-auth.out -covermode=atomic ./... && cd ../..
+          (cd services/auth && go test -v -race -coverprofile=../../coverage-auth.out -covermode=atomic ./...)
 
           echo "Testing API Gateway Service..."
-          cd services/api-gateway && go test -v -race -coverprofile=../../coverage-api-gateway.out -covermode=atomic ./... && cd ../..
+          (cd services/api-gateway && go test -v -race -coverprofile=../../coverage-api-gateway.out -covermode=atomic ./...)
 
           echo "Testing Storage Service..."
-          cd services/storage && go test -v -race -coverprofile=../../coverage-storage.out -covermode=atomic ./... && cd ../..
+          (cd services/storage && go test -v -race -coverprofile=../../coverage-storage.out -covermode=atomic ./...)
 
           echo "Testing Notification Service..."
-          cd services/notification && go test -v -race -coverprofile=../../coverage-notification.out -covermode=atomic ./... && cd ../..
+          (cd services/notification && go test -v -race -coverprofile=../../coverage-notification.out -covermode=atomic ./...)
 
           echo "Testing Processing Worker Service..."
-          cd services/processing-worker && go test -v -race -coverprofile=../../coverage-processing-worker.out -covermode=atomic ./... && cd ../..
+          (cd services/processing-worker && go test -v -race -coverprofile=../../coverage-processing-worker.out -covermode=atomic ./...)
 
           # Merge coverage files
           echo "Merging coverage reports..."
