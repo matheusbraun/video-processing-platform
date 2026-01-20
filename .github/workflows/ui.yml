@@ -4,16 +4,16 @@ on:
   pull_request:
     branches: [main, develop]
     paths:
-      - 'ui/**'
-      - '.github/workflows/ui.yml'
+      - "ui/**"
+      - ".github/workflows/ui.yml"
   push:
     branches: [main, develop]
     paths:
-      - 'ui/**'
-      - '.github/workflows/ui.yml'
+      - "ui/**"
+      - ".github/workflows/ui.yml"
 
 env:
-  BUN_VERSION: '1.1.38'
+  BUN_VERSION: "1.1.38"
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}/ui
 
@@ -74,6 +74,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.12"
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -83,7 +88,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Build application
-        run: bun run build
+        run: bun --bun vite build
         env:
           VITE_API_URL: http://localhost:8080
 
@@ -97,6 +102,9 @@ jobs:
   security:
     name: Security Scan
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     defaults:
       run:
         working-directory: ui
@@ -119,16 +127,16 @@ jobs:
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          scan-type: 'fs'
-          scan-ref: 'ui'
-          format: 'sarif'
-          output: 'trivy-ui-results.sarif'
-          severity: 'CRITICAL,HIGH'
+          scan-type: "fs"
+          scan-ref: "ui"
+          format: "sarif"
+          output: "trivy-ui-results.sarif"
+          severity: "CRITICAL,HIGH"
 
       - name: Upload Trivy results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
-          sarif_file: 'trivy-ui-results.sarif'
+          sarif_file: "trivy-ui-results.sarif"
 
   build-image:
     name: Build Docker Image

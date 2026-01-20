@@ -19,13 +19,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Wait for Docker images to be built
+      - name: Wait for CI checks to complete
         uses: lewagon/wait-on-check-action@v1.3.4
         with:
           ref: ${{ github.sha }}
-          check-name: "Build Docker Images"
+          check-regexp: "(Lint Go Code|Test Go Services|Lint React Code|TypeScript Type Check|Build Docker Images)"
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-          wait-interval: 10
+          wait-interval: 20
           allowed-conclusions: success
 
       - name: Set image tag
