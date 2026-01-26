@@ -150,7 +150,7 @@ func TestVideoRepository_FindByUserID(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		video := &entities.Video{
 			UserID:       1,
-			Filename:     "test" + string(rune(i)) + ".mp4",
+			Filename:     time.Now().Format("20060102150405") + ".mp4",
 			OriginalPath: "uploads/test.mp4",
 			Status:       entities.StatusPending,
 			FPS:          30,
@@ -195,7 +195,7 @@ func TestVideoRepository_FindByUserID_Pagination(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		video := &entities.Video{
 			UserID:       1,
-			Filename:     "test" + string(rune(i)) + ".mp4",
+			Filename:     time.Now().Format("20060102150405") + ".mp4",
 			OriginalPath: "uploads/test.mp4",
 			Status:       entities.StatusPending,
 			FPS:          30,
