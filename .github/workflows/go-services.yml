@@ -8,6 +8,7 @@ on:
       - "shared/**"
       - "go.work"
       - "go.work.sum"
+      - ".golangci.yml"
       - ".github/workflows/go-services.yml"
   push:
     branches: [main, develop]
@@ -16,6 +17,7 @@ on:
       - "shared/**"
       - "go.work"
       - "go.work.sum"
+      - ".golangci.yml"
       - ".github/workflows/go-services.yml"
 
 env:
