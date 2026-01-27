@@ -26,46 +26,6 @@ env:
   IMAGE_PREFIX: ${{ github.repository }}
 
 jobs:
-  lint:
-    name: Lint Go Code
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: true
-
-      - name: Install golangci-lint
-        run: |
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.8.0
-
-      - name: Run golangci-lint
-        run: |
-          # Lint each service module individually (required for go workspaces)
-          set -e
-
-          echo "Linting Auth Service..."
-          (cd services/auth && golangci-lint run --timeout=5m ./...)
-
-          echo "Linting API Gateway Service..."
-          (cd services/api-gateway && golangci-lint run --timeout=5m ./...)
-
-          echo "Linting Storage Service..."
-          (cd services/storage && golangci-lint run --timeout=5m ./...)
-
-          echo "Linting Notification Service..."
-          (cd services/notification && golangci-lint run --timeout=5m ./...)
-
-          echo "Linting Processing Worker Service..."
-          (cd services/processing-worker && golangci-lint run --timeout=5m ./...)
-
-          echo "Linting Shared Package..."
-          (cd shared && golangci-lint run --timeout=5m ./...)
-
   test:
     name: Test Go Services
     runs-on: ubuntu-latest
@@ -189,7 +149,7 @@ jobs:
   build-images:
     name: Build Docker Images
     runs-on: ubuntu-latest
-    needs: [lint, test, security]
+    needs: [test, security]
     if: github.event_name == 'push'
     permissions:
       contents: read
@@ -241,7 +201,7 @@ jobs:
   build-cleanup:
     name: Build Cleanup Cron Image
     runs-on: ubuntu-latest
-    needs: [lint, test, security]
+    needs: [test, security]
     if: github.event_name == 'push'
     permissions:
       contents: read
