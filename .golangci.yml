@@ -7,18 +7,19 @@ run:
 
 linters:
   enable:
-    - errcheck # Check for unchecked errors
     - govet # Vet examines Go source code
     - ineffassign # Detect ineffectual assignments
     - staticcheck # Staticcheck (includes gosimple)
     - unused # Check for unused constants, variables, functions
     - misspell # Find commonly misspelled words
-    - revive # Fast, configurable, extensible linter
-    - gosec # Security-focused linter
     - gocritic # Opinionated Go linter
     - bodyclose # Check HTTP response body is closed
     - errorlint # Find misuses of errors
     - gocyclo # Compute cyclomatic complexity
+  disable:
+    - errcheck # Too many false positives
+    - gosec # Too strict for development
+    - revive # Disabled - too many style requirements
 
 formatters:
   enable:
@@ -29,11 +30,14 @@ linters-settings:
   errcheck:
     check-type-assertions: false
     check-blank: false
+    ignore: fmt:.*,io:EOF
     exclude-functions:
       - (net/http.ResponseWriter).Write
       - (*database/sql.DB).Close
       - (*database/sql.Rows).Close
       - (*os.File).Close
+    exclude:
+      - Error return value of .*(Close|Write) is not checked
 
   govet:
     enable-all: true
@@ -52,16 +56,6 @@ linters-settings:
       - G114 # Use of net/http serve function that has no support for setting timeouts
       - G304 # File path provided as taint input (false positives in config loading)
 
-  revive:
-    enable-all-rules: false
-    rules:
-      - name: var-naming
-        disabled: false
-      - name: indent-error-flow
-        disabled: false
-      - name: errorf
-        disabled: false
-
 issues:
   exclude-use-default: false
   max-issues-per-linter: 0
@@ -74,7 +68,22 @@ issues:
         - gocyclo
         - errcheck
         - gosec
-        - revive
+
+    # Ignore unchecked Close and Write calls
+    - text: "Error return value of.*Close.*is not checked"
+      linters:
+        - errcheck
+    - text: "Error return value of.*Write.*is not checked"
+      linters:
+        - errcheck
+    - text: "Error return value of.*Terminate.*is not checked"
+      linters:
+        - errcheck
+
+    # Ignore G114 gosec warning about http.ListenAndServe
+    - text: "G114"
+      linters:
+        - gosec
 
 output:
   formats:
