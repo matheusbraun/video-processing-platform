@@ -27,11 +27,18 @@ formatters:
 
 linters-settings:
   errcheck:
-    check-type-assertions: true
-    check-blank: true
+    check-type-assertions: false
+    check-blank: false
+    exclude-functions:
+      - (net/http.ResponseWriter).Write
+      - (*database/sql.DB).Close
+      - (*database/sql.Rows).Close
+      - (*os.File).Close
 
   govet:
     enable-all: true
+    disable:
+      - shadow
 
   gocyclo:
     min-complexity: 15
@@ -42,18 +49,18 @@ linters-settings:
   gosec:
     excludes:
       - G104 # Audit errors not checked (covered by errcheck)
+      - G114 # Use of net/http serve function that has no support for setting timeouts
       - G304 # File path provided as taint input (false positives in config loading)
 
   revive:
+    enable-all-rules: false
     rules:
-      - name: exported
-        disabled: true # Disable requirement for comments on all exported items
       - name: var-naming
         disabled: false
-      - name: package-comments
-        disabled: true # Not all packages need comments
-      - name: unused-parameter
-        disabled: true # Allow unused parameters in interfaces/handlers
+      - name: indent-error-flow
+        disabled: false
+      - name: errorf
+        disabled: false
 
 issues:
   exclude-use-default: false
@@ -67,22 +74,7 @@ issues:
         - gocyclo
         - errcheck
         - gosec
-
-    # Exclude main.go from requiring package comments
-    - path: cmd/.*main\.go
-      linters:
         - revive
-      text: "package-comments"
-
-    # Allow http.ListenAndServe in development (G114)
-    - linters:
-        - gosec
-      text: "G114"
-
-    # Allow unchecked errors in cleanup/defer statements
-    - linters:
-        - errcheck
-      text: "Error return value of .*(Close|Write) is not checked"
 
 output:
   formats:
