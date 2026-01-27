@@ -13,7 +13,7 @@ on:
       - ".github/workflows/ui.yml"
 
 env:
-  BUN_VERSION: "1.1.38"
+  BUN_VERSION: "latest"
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}/ui
 
