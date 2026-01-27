@@ -4,7 +4,11 @@ WORKDIR /app
 
 COPY go.work go.work.sum ./
 COPY shared/ shared/
+COPY services/auth/ services/auth/
+COPY services/api-gateway/ services/api-gateway/
+COPY services/storage/ services/storage/
 COPY services/notification/ services/notification/
+COPY services/processing-worker/ services/processing-worker/
 
 WORKDIR /app/services/notification
 
