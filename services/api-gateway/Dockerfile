@@ -13,15 +13,27 @@ COPY services/processing-worker/ services/processing-worker/
 WORKDIR /app/services/api-gateway
 
 RUN go mod download
+
+# Build the application
 RUN CGO_ENABLED=0 GOOS=linux go build -o /api-gateway cmd/server/main.go
 
+# Final stage
 FROM alpine:latest
 
 RUN apk --no-cache add ca-certificates
 
-WORKDIR /root/
+# Create non-root user
+RUN adduser -D -u 10001 appuser
 
-COPY --from=builder /api-gateway .
+WORKDIR /app
+
+# Copy binary
+COPY --from=builder /api-gateway ./api-gateway
+
+# Change ownership to non-root user
+RUN chown -R appuser:appuser /app
+
+USER appuser
 
 EXPOSE 8080
 

@@ -19,13 +19,17 @@ import (
 	"github.com/video-platform/shared/pkg/database/postgres"
 	"github.com/video-platform/shared/pkg/messaging/rabbitmq"
 	"github.com/video-platform/shared/pkg/storage/s3"
+	"gorm.io/gorm"
 )
 
 func InitializeApp() *fx.App {
 	return fx.New(
 		fx.Provide(
 			config.Load,
-			postgres.NewPostgresDB,
+
+			func(cfg *config.Config) (*gorm.DB, error) {
+				return postgres.NewPostgresDB(cfg.DatabaseURL)
+			},
 
 			func(cfg *config.Config) (s3.S3Client, error) {
 				return s3.NewS3Client(cfg.AWSRegion, cfg.AWSAccessKeyID, cfg.AWSSecretAccessKey, cfg.S3UploadsBucket)

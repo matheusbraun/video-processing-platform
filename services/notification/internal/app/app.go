@@ -19,13 +19,17 @@ import (
 	"github.com/video-platform/shared/pkg/config"
 	"github.com/video-platform/shared/pkg/database/postgres"
 	"github.com/video-platform/shared/pkg/messaging/rabbitmq"
+	"gorm.io/gorm"
 )
 
 func InitializeApp() *fx.App {
 	return fx.New(
 		fx.Provide(
 			config.Load,
-			postgres.NewPostgresDB,
+
+			func(cfg *config.Config) (*gorm.DB, error) {
+				return postgres.NewPostgresDB(cfg.DatabaseURL)
+			},
 
 			func(cfg *config.Config) (*rabbitmq.Consumer, error) {
 				return rabbitmq.NewConsumer(cfg.RabbitMQURL)

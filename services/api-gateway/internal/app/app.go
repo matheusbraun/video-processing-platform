@@ -8,7 +8,9 @@ import (
 
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/chi/v5"
+	httpSwagger "github.com/swaggo/http-swagger"
 	"go.uber.org/fx"
+	"gorm.io/gorm"
 
 	"github.com/video-platform/services/api-gateway/internal/controller"
 	"github.com/video-platform/services/api-gateway/internal/domain/repositories"
@@ -30,7 +32,10 @@ func InitializeApp() *fx.App {
 	return fx.New(
 		fx.Provide(
 			config.Load,
-			postgres.NewPostgresDB,
+
+			func(cfg *config.Config) (*gorm.DB, error) {
+				return postgres.NewPostgresDB(cfg.DatabaseURL)
+			},
 
 			func(cfg *config.Config) jwt.JWTManager {
 				return jwt.NewJWTManager(cfg.JWTSecret, cfg.JWTAccessExpiry, cfg.JWTRefreshExpiry)
@@ -66,6 +71,9 @@ func registerRoutes(r *chi.Mux, httpController *apiController.VideoHTTPControlle
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(corsMiddleware)
+
+	// Swagger UI
+	r.Get("/swagger/*", httpSwagger.WrapHandler)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		httpController.RegisterRoutes(r, jwtManager)
