@@ -35,6 +35,18 @@ func (h *VideoHTTPController) RegisterRoutes(r chi.Router, jwtManager jwt.JWTMan
 	r.Get("/videos/{id}/download", jwt.Middleware(jwtManager)(http.HandlerFunc(h.Download)).ServeHTTP)
 }
 
+// Upload godoc
+// @Summary Upload a video for processing
+// @Description Uploads a video file for asynchronous frame extraction processing (1 FPS)
+// @Tags videos
+// @Accept multipart/form-data
+// @Produce json
+// @Param video formData file true "Video file to upload (max 500MB)"
+// @Success 201 {object} dto.UploadResponse "Video uploaded successfully"
+// @Failure 400 {object} rest.ErrorResponse "Invalid request or file validation failed"
+// @Failure 401 {object} rest.ErrorResponse "Unauthorized - missing or invalid JWT token"
+// @Security BearerAuth
+// @Router /videos/upload [post]
 func (h *VideoHTTPController) Upload(w http.ResponseWriter, r *http.Request) {
 	claims, ok := jwt.GetClaimsFromContext(r.Context())
 	if !ok {
@@ -72,6 +84,19 @@ func (h *VideoHTTPController) Upload(w http.ResponseWriter, r *http.Request) {
 	rest.RespondCreated(w, response)
 }
 
+// List godoc
+// @Summary List all videos for authenticated user
+// @Description Get a paginated list of all videos uploaded by the authenticated user
+// @Tags videos
+// @Accept json
+// @Produce json
+// @Param limit query int false "Maximum number of videos to return (1-100, default: 20)"
+// @Param offset query int false "Number of videos to skip for pagination (default: 0)"
+// @Success 200 {object} dto.ListResponse "List of videos retrieved successfully"
+// @Failure 401 {object} rest.ErrorResponse "Unauthorized - missing or invalid JWT token"
+// @Failure 500 {object} rest.ErrorResponse "Internal server error"
+// @Security BearerAuth
+// @Router /videos [get]
 func (h *VideoHTTPController) List(w http.ResponseWriter, r *http.Request) {
 	claims, ok := jwt.GetClaimsFromContext(r.Context())
 	if !ok {
@@ -105,6 +130,19 @@ func (h *VideoHTTPController) List(w http.ResponseWriter, r *http.Request) {
 	rest.RespondSuccess(w, response)
 }
 
+// Status godoc
+// @Summary Get video processing status
+// @Description Retrieve detailed status information for a specific video including processing state, frame count, and timestamps
+// @Tags videos
+// @Accept json
+// @Produce json
+// @Param id path string true "Video ID (UUID format)"
+// @Success 200 {object} dto.StatusResponse "Video status retrieved successfully"
+// @Failure 400 {object} rest.ErrorResponse "Invalid video ID format"
+// @Failure 401 {object} rest.ErrorResponse "Unauthorized - missing or invalid JWT token"
+// @Failure 404 {object} rest.ErrorResponse "Video not found or does not belong to user"
+// @Security BearerAuth
+// @Router /videos/{id}/status [get]
 func (h *VideoHTTPController) Status(w http.ResponseWriter, r *http.Request) {
 	claims, ok := jwt.GetClaimsFromContext(r.Context())
 	if !ok {
@@ -134,6 +172,19 @@ func (h *VideoHTTPController) Status(w http.ResponseWriter, r *http.Request) {
 	rest.RespondSuccess(w, response)
 }
 
+// Download godoc
+// @Summary Get download URL for processed frames
+// @Description Generate a presigned S3 URL to download the ZIP file containing extracted video frames
+// @Tags videos
+// @Accept json
+// @Produce json
+// @Param id path string true "Video ID (UUID format)"
+// @Success 200 {object} dto.DownloadResponse "Download URL generated successfully"
+// @Failure 400 {object} rest.ErrorResponse "Invalid video ID or video processing not completed"
+// @Failure 401 {object} rest.ErrorResponse "Unauthorized - missing or invalid JWT token"
+// @Failure 404 {object} rest.ErrorResponse "Video not found or does not belong to user"
+// @Security BearerAuth
+// @Router /videos/{id}/download [get]
 func (h *VideoHTTPController) Download(w http.ResponseWriter, r *http.Request) {
 	claims, ok := jwt.GetClaimsFromContext(r.Context())
 	if !ok {
