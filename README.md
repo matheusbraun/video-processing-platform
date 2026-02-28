@@ -125,6 +125,7 @@ This will start:
 
 - **UI**: http://localhost:3000
 - **API**: http://localhost:8080
+- **API Documentation (Swagger)**: http://localhost:8080/swagger/index.html
 - **RabbitMQ Management**: http://localhost:15672 (user: `video`, pass: `secret`)
 
 ## Development
@@ -188,6 +189,33 @@ All services automatically access shared libraries through Go workspace.
 - `GET /videos` - List user's videos (auth required)
 - `GET /videos/:id/status` - Get video status (auth required)
 - `GET /videos/:id/download` - Download ZIP (auth required)
+
+## API Documentation
+
+### Interactive Swagger UI
+
+The API Gateway includes interactive API documentation powered by Swagger/OpenAPI:
+
+**Access:** http://localhost:8080/swagger/index.html
+
+Features:
+- **Try It Out**: Test endpoints directly from the browser
+- **Authentication**: Click "Authorize" and enter your JWT token (format: `Bearer <token>`)
+- **Schema Definitions**: View request/response models
+- **Example Values**: See example payloads for each endpoint
+
+### Generating Swagger Docs
+
+If you modify API endpoints or models:
+
+```bash
+cd services/api-gateway
+make swagger
+# Or manually:
+swag init -g cmd/server/main.go --output docs --parseDependency --parseInternal
+```
+
+The Swagger docs are automatically regenerated during Docker builds.
 
 ## Video Processing Flow
 

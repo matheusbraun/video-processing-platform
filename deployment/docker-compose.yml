@@ -62,8 +62,8 @@ services:
   # Auth Service
   auth-service:
     build:
-      context: ../services/auth
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: services/auth/Dockerfile
     container_name: video-platform-auth
     environment:
       SERVER_PORT: "8080"
@@ -86,8 +86,8 @@ services:
   # API Gateway Service
   api-gateway:
     build:
-      context: ../services/api-gateway
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: services/api-gateway/Dockerfile
     container_name: video-platform-api-gateway
     environment:
       SERVER_PORT: "8080"
@@ -120,9 +120,8 @@ services:
   # Processing Worker Service
   processing-worker:
     build:
-      context: ../services/processing-worker
-      dockerfile: Dockerfile
-    container_name: video-platform-worker
+      context: ..
+      dockerfile: services/processing-worker/Dockerfile
     deploy:
       replicas: 3
     environment:
@@ -145,8 +144,8 @@ services:
   # Storage Service
   storage-service:
     build:
-      context: ../services/storage
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: services/storage/Dockerfile
     container_name: video-platform-storage
     environment:
       SERVER_PORT: "8080"
@@ -168,8 +167,8 @@ services:
   # Notification Service
   notification-service:
     build:
-      context: ../services/notification
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: services/notification/Dockerfile
     container_name: video-platform-notification
     environment:
       DATABASE_URL: postgres://videoadmin:secret@postgres:5432/video_platform?sslmode=disable
@@ -190,8 +189,8 @@ services:
   # React UI
   ui:
     build:
-      context: ../ui
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: ui/Dockerfile
     container_name: video-platform-ui
     environment:
       VITE_API_URL: http://localhost:8080

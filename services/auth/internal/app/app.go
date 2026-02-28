@@ -22,13 +22,17 @@ import (
 	"github.com/video-platform/shared/pkg/auth/jwt"
 	"github.com/video-platform/shared/pkg/config"
 	"github.com/video-platform/shared/pkg/database/postgres"
+	"gorm.io/gorm"
 )
 
 func InitializeApp() *fx.App {
 	return fx.New(
 		fx.Provide(
 			config.Load,
-			postgres.NewPostgresDB,
+
+			func(cfg *config.Config) (*gorm.DB, error) {
+				return postgres.NewPostgresDB(cfg.DatabaseURL)
+			},
 
 			func(cfg *config.Config) jwt.JWTManager {
 				return jwt.NewJWTManager(cfg.JWTSecret, cfg.JWTAccessExpiry, cfg.JWTRefreshExpiry)

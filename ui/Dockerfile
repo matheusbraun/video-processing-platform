@@ -4,13 +4,13 @@ FROM oven/bun:1 AS builder
 WORKDIR /app
 
 # Copy package files
-COPY package.json bun.lock ./
+COPY ui/package.json ui/bun.lock ./
 
 # Install dependencies
 RUN bun install --frozen-lockfile
 
 # Copy source code
-COPY . .
+COPY ui/ .
 
 # Build the application
 RUN bun run build
@@ -19,7 +19,7 @@ RUN bun run build
 FROM nginx:alpine
 
 # Copy custom nginx configuration
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY ui/nginx.conf /etc/nginx/conf.d/default.conf
 
 # Copy built assets from builder stage
 COPY --from=builder /app/dist /usr/share/nginx/html
