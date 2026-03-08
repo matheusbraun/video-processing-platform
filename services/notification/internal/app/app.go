@@ -3,12 +3,15 @@ package app
 import (
 	"context"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
 	"syscall"
 
 	"go.uber.org/fx"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/video-platform/services/notification/internal/controller"
 	"github.com/video-platform/services/notification/internal/domain/repositories"
@@ -67,6 +70,10 @@ func startWorker(lc fx.Lifecycle, consumer *messaging.NotificationConsumer) {
 				if err := consumer.Start(ctx); err != nil {
 					log.Printf("Worker error: %v", err)
 				}
+			}()
+			go func() {
+				log.Println("Starting metrics server on :8080")
+				http.ListenAndServe(":8080", promhttp.Handler())
 			}()
 			return nil
 		},

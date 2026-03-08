@@ -12,6 +12,8 @@ import (
 	"go.uber.org/fx"
 	"gorm.io/gorm"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+
 	"github.com/video-platform/services/api-gateway/internal/controller"
 	"github.com/video-platform/services/api-gateway/internal/domain/repositories"
 	apiController "github.com/video-platform/services/api-gateway/internal/infrastructure/api/controller"
@@ -85,6 +87,8 @@ func registerRoutes(r *chi.Mux, httpController *apiController.VideoHTTPControlle
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 	})
+
+	r.Handle("/metrics", promhttp.Handler())
 }
 
 func corsMiddleware(next http.Handler) http.Handler {
