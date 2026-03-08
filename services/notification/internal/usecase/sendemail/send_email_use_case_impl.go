@@ -9,20 +9,24 @@ import (
 	"github.com/video-platform/services/notification/internal/infrastructure/smtp"
 	"github.com/video-platform/services/notification/internal/usecase/commands"
 	"github.com/video-platform/shared/pkg/logging"
+	"github.com/video-platform/shared/pkg/metrics"
 )
 
 type sendEmailUseCaseImpl struct {
 	notificationRepo repositories.NotificationRepository
 	smtpClient       smtp.SMTPClient
+	metrics          *metrics.Metrics
 }
 
 func NewSendEmailUseCase(
 	notificationRepo repositories.NotificationRepository,
 	smtpClient smtp.SMTPClient,
+	m *metrics.Metrics,
 ) SendEmailUseCase {
 	return &sendEmailUseCaseImpl{
 		notificationRepo: notificationRepo,
 		smtpClient:       smtpClient,
+		metrics:          m,
 	}
 }
 
@@ -69,12 +73,14 @@ func (uc *sendEmailUseCaseImpl) Execute(ctx context.Context, cmd commands.SendEm
 		if updateErr := uc.notificationRepo.MarkAsFailed(ctx, notification.ID, errMsg); updateErr != nil {
 			logging.Error("Failed to mark notification as failed", "error", updateErr)
 		}
+		uc.metrics.EmailsSent.WithLabelValues("failed").Inc()
 		return fmt.Errorf("failed to send email: %w", err)
 	}
 
 	if err := uc.notificationRepo.MarkAsSent(ctx, notification.ID); err != nil {
 		logging.Error("Failed to mark notification as sent", "error", err)
 	}
+	uc.metrics.EmailsSent.WithLabelValues("success").Inc()
 
 	logging.Info("Email sent successfully", "recipient", cmd.UserEmail, "video_id", cmd.VideoID)
 	return nil

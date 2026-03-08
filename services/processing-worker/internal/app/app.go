@@ -3,11 +3,14 @@ package app
 import (
 	"context"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"go.uber.org/fx"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/video-platform/services/processing-worker/internal/controller"
 	"github.com/video-platform/services/processing-worker/internal/domain/repositories"
@@ -18,6 +21,7 @@ import (
 	"github.com/video-platform/shared/pkg/config"
 	"github.com/video-platform/shared/pkg/database/postgres"
 	"github.com/video-platform/shared/pkg/messaging/rabbitmq"
+	"github.com/video-platform/shared/pkg/metrics"
 	"github.com/video-platform/shared/pkg/storage/s3"
 	"gorm.io/gorm"
 )
@@ -27,12 +31,16 @@ func InitializeApp() *fx.App {
 		fx.Provide(
 			config.Load,
 
+			func() *metrics.Metrics {
+				return metrics.NewMetrics("processing-worker")
+			},
+
 			func(cfg *config.Config) (*gorm.DB, error) {
 				return postgres.NewPostgresDB(cfg.DatabaseURL)
 			},
 
 			func(cfg *config.Config) (s3.S3Client, error) {
-				return s3.NewS3Client(cfg.AWSRegion, cfg.AWSAccessKeyID, cfg.AWSSecretAccessKey, cfg.S3UploadsBucket)
+				return s3.NewS3Client(cfg.AWSRegion, cfg.AWSAccessKeyID, cfg.AWSSecretAccessKey, cfg.S3EndpointURL, cfg.S3UploadsBucket)
 			},
 
 			func(cfg *config.Config) (*rabbitmq.Consumer, error) {
@@ -53,8 +61,9 @@ func InitializeApp() *fx.App {
 				ffmpegService ffmpeg.FFmpegService,
 				publisher rabbitmq.Publisher,
 				cfg *config.Config,
+				m *metrics.Metrics,
 			) process.ProcessUseCase {
-				return process.NewProcessUseCase(videoRepo, s3Client, ffmpegService, publisher, cfg.S3ProcessedBucket)
+				return process.NewProcessUseCase(videoRepo, s3Client, ffmpegService, publisher, cfg.S3ProcessedBucket, m)
 			},
 
 			fx.Annotate(controller.NewWorkerController, fx.As(new(controller.WorkerController))),
@@ -75,6 +84,10 @@ func startWorker(lc fx.Lifecycle, consumer *messaging.VideoConsumer) {
 				if err := consumer.Start(ctx); err != nil {
 					log.Printf("Worker error: %v", err)
 				}
+			}()
+			go func() {
+				log.Println("Starting metrics server on :8080")
+				http.ListenAndServe(":8080", promhttp.Handler())
 			}()
 			return nil
 		},

@@ -10,6 +10,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/fx"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+
 	"github.com/video-platform/services/auth/internal/controller"
 	"github.com/video-platform/services/auth/internal/domain/repositories"
 	apiController "github.com/video-platform/services/auth/internal/infrastructure/api/controller"
@@ -70,6 +72,8 @@ func registerRoutes(r *chi.Mux, httpController *apiController.AuthHTTPController
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 	})
+
+	r.Handle("/metrics", promhttp.Handler())
 }
 
 func corsMiddleware(next http.Handler) http.Handler {

@@ -1,6 +1,5 @@
-import { createFileRoute } from '@tanstack/react-router';
-import { VideosPage } from '@/pages/videos';
+import { createFileRoute, Outlet } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/_protected/videos')({
-  component: VideosPage,
+  component: () => <Outlet />,
 });

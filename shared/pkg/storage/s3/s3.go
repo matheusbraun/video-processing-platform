@@ -31,7 +31,7 @@ type client struct {
 	bucket     string
 }
 
-func NewS3Client(region, accessKeyID, secretAccessKey, bucket string) (S3Client, error) {
+func NewS3Client(region, accessKeyID, secretAccessKey, endpointURL, bucket string) (S3Client, error) {
 	ctx := context.Background()
 	awsCfg, err := config.LoadDefaultConfig(ctx,
 		config.WithRegion(region),
@@ -45,7 +45,15 @@ func NewS3Client(region, accessKeyID, secretAccessKey, bucket string) (S3Client,
 		return nil, fmt.Errorf("failed to load AWS config: %w", err)
 	}
 
-	s3Client := s3.NewFromConfig(awsCfg)
+	var s3Options []func(*s3.Options)
+	if endpointURL != "" {
+		s3Options = append(s3Options, func(o *s3.Options) {
+			o.BaseEndpoint = aws.String(endpointURL)
+			o.UsePathStyle = true
+		})
+	}
+
+	s3Client := s3.NewFromConfig(awsCfg, s3Options...)
 
 	return &client{
 		s3Client:   s3Client,
@@ -55,9 +63,16 @@ func NewS3Client(region, accessKeyID, secretAccessKey, bucket string) (S3Client,
 	}, nil
 }
 
+func (c *client) resolveBucket(bucket string) string {
+	if bucket == "" {
+		return c.bucket
+	}
+	return bucket
+}
+
 func (c *client) Upload(ctx context.Context, bucket, key string, body io.Reader) error {
 	_, err := c.uploader.Upload(ctx, &s3.PutObjectInput{
-		Bucket: aws.String(bucket),
+		Bucket: aws.String(c.resolveBucket(bucket)),
 		Key:    aws.String(key),
 		Body:   body,
 	})
@@ -69,7 +84,7 @@ func (c *client) Upload(ctx context.Context, bucket, key string, body io.Reader)
 
 func (c *client) Download(ctx context.Context, bucket, key string, writer io.WriterAt) error {
 	_, err := c.downloader.Download(ctx, writer, &s3.GetObjectInput{
-		Bucket: aws.String(bucket),
+		Bucket: aws.String(c.resolveBucket(bucket)),
 		Key:    aws.String(key),
 	})
 	if err != nil {
@@ -80,7 +95,7 @@ func (c *client) Download(ctx context.Context, bucket, key string, writer io.Wri
 
 func (c *client) GetObject(ctx context.Context, bucket, key string) (io.ReadCloser, error) {
 	result, err := c.s3Client.GetObject(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(bucket),
+		Bucket: aws.String(c.resolveBucket(bucket)),
 		Key:    aws.String(key),
 	})
 	if err != nil {
@@ -91,7 +106,7 @@ func (c *client) GetObject(ctx context.Context, bucket, key string) (io.ReadClos
 
 func (c *client) Delete(ctx context.Context, bucket, key string) error {
 	_, err := c.s3Client.DeleteObject(ctx, &s3.DeleteObjectInput{
-		Bucket: aws.String(bucket),
+		Bucket: aws.String(c.resolveBucket(bucket)),
 		Key:    aws.String(key),
 	})
 	if err != nil {
@@ -109,7 +124,7 @@ func (c *client) DeleteMultiple(ctx context.Context, bucket string, keys []strin
 	}
 
 	_, err := c.s3Client.DeleteObjects(ctx, &s3.DeleteObjectsInput{
-		Bucket: aws.String(bucket),
+		Bucket: aws.String(c.resolveBucket(bucket)),
 		Delete: &s3Types.Delete{
 			Objects: objects,
 		},
@@ -124,7 +139,7 @@ func (c *client) GeneratePresignedURL(ctx context.Context, bucket, key string, e
 	presignClient := s3.NewPresignClient(c.s3Client)
 
 	presignedReq, err := presignClient.PresignGetObject(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(bucket),
+		Bucket: aws.String(c.resolveBucket(bucket)),
 		Key:    aws.String(key),
 	}, func(opts *s3.PresignOptions) {
 		opts.Expires = expiration
@@ -138,7 +153,7 @@ func (c *client) GeneratePresignedURL(ctx context.Context, bucket, key string, e
 
 func (c *client) ListObjects(ctx context.Context, bucket, prefix string) ([]string, error) {
 	result, err := c.s3Client.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
-		Bucket: aws.String(bucket),
+		Bucket: aws.String(c.resolveBucket(bucket)),
 		Prefix: aws.String(prefix),
 	})
 	if err != nil {

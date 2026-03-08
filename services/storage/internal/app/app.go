@@ -10,6 +10,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/fx"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+
 	"github.com/video-platform/services/storage/internal/controller"
 	"github.com/video-platform/services/storage/internal/infrastructure/api"
 	"github.com/video-platform/services/storage/internal/usecase/createzip"
@@ -23,7 +25,7 @@ func InitializeApp() *fx.App {
 			config.Load,
 
 			func(cfg *config.Config) (s3.S3Client, error) {
-				return s3.NewS3Client(cfg.AWSRegion, cfg.AWSAccessKeyID, cfg.AWSSecretAccessKey, cfg.S3ProcessedBucket)
+				return s3.NewS3Client(cfg.AWSRegion, cfg.AWSAccessKeyID, cfg.AWSSecretAccessKey, cfg.S3EndpointURL, cfg.S3ProcessedBucket)
 			},
 
 			fx.Annotate(createzip.NewCreateZipUseCase, fx.As(new(createzip.CreateZipUseCase))),
@@ -47,6 +49,8 @@ func registerRoutes(r *chi.Mux, httpController *api.StorageHTTPController) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 	})
+
+	r.Handle("/metrics", promhttp.Handler())
 }
 
 func startHTTPServer(lc fx.Lifecycle, r *chi.Mux, cfg *config.Config) {

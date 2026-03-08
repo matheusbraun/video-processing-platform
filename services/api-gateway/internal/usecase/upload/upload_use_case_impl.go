@@ -13,6 +13,7 @@ import (
 	"github.com/video-platform/services/api-gateway/internal/domain/repositories"
 	"github.com/video-platform/services/api-gateway/internal/usecase/commands"
 	"github.com/video-platform/shared/pkg/messaging/rabbitmq"
+	"github.com/video-platform/shared/pkg/metrics"
 	"github.com/video-platform/shared/pkg/storage/s3"
 )
 
@@ -33,17 +34,20 @@ type uploadUseCaseImpl struct {
 	videoRepo repositories.VideoRepository
 	s3Client  s3.S3Client
 	publisher rabbitmq.Publisher
+	metrics   *metrics.Metrics
 }
 
 func NewUploadUseCase(
 	videoRepo repositories.VideoRepository,
 	s3Client s3.S3Client,
 	publisher rabbitmq.Publisher,
+	m *metrics.Metrics,
 ) UploadUseCase {
 	return &uploadUseCaseImpl{
 		videoRepo: videoRepo,
 		s3Client:  s3Client,
 		publisher: publisher,
+		metrics:   m,
 	}
 }
 
@@ -73,12 +77,14 @@ func (uc *uploadUseCaseImpl) Execute(ctx context.Context, cmd commands.UploadCom
 	if err := uc.videoRepo.Create(ctx, video); err != nil {
 		return nil, fmt.Errorf("failed to create video record: %w", err)
 	}
+	uc.metrics.VideosTotal.WithLabelValues("pending").Inc()
 
 	jobMessage := map[string]interface{}{
-		"video_id": videoID.String(),
-		"user_id":  cmd.UserID,
-		"s3_key":   s3Key,
-		"filename": cmd.Filename,
+		"video_id":   videoID.String(),
+		"user_id":    cmd.UserID,
+		"user_email": cmd.UserEmail,
+		"s3_key":     s3Key,
+		"filename":   cmd.Filename,
 	}
 
 	if err := uc.publisher.Publish(ctx, "video.processing.queue", jobMessage); err != nil {

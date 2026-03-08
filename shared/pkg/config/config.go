@@ -22,11 +22,13 @@ type Config struct {
 	RabbitMQURL string
 
 	// AWS S3
-	AWSRegion          string
-	AWSAccessKeyID     string
-	AWSSecretAccessKey string
-	S3UploadsBucket    string
-	S3ProcessedBucket  string
+	AWSRegion           string
+	AWSAccessKeyID      string
+	AWSSecretAccessKey  string
+	S3EndpointURL       string
+	S3PublicEndpointURL string
+	S3UploadsBucket     string
+	S3ProcessedBucket   string
 
 	// JWT
 	JWTSecret        string
@@ -82,8 +84,10 @@ func Load() (*Config, error) {
 		RedisURL:             getEnv("REDIS_URL", ""),
 		RabbitMQURL:          getEnv("RABBITMQ_URL", ""),
 		AWSRegion:            getEnv("AWS_REGION", "us-east-1"),
-		AWSAccessKeyID:       getEnv("AWS_ACCESS_KEY_ID", ""),
-		AWSSecretAccessKey:   getEnv("AWS_SECRET_ACCESS_KEY", ""),
+		AWSAccessKeyID:       getEnv("AWS_ACCESS_KEY_ID", "test"),
+		AWSSecretAccessKey:   getEnv("AWS_SECRET_ACCESS_KEY", "test"),
+		S3EndpointURL:        getEnv("S3_ENDPOINT_URL", ""),
+		S3PublicEndpointURL:  getEnv("S3_PUBLIC_ENDPOINT_URL", ""),
 		S3UploadsBucket:      getEnv("S3_UPLOADS_BUCKET", ""),
 		S3ProcessedBucket:    getEnv("S3_PROCESSED_BUCKET", ""),
 		JWTSecret:            getEnv("JWT_SECRET", ""),

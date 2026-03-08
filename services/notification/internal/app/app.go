@@ -3,12 +3,15 @@ package app
 import (
 	"context"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
 	"syscall"
 
 	"go.uber.org/fx"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/video-platform/services/notification/internal/controller"
 	"github.com/video-platform/services/notification/internal/domain/repositories"
@@ -19,6 +22,7 @@ import (
 	"github.com/video-platform/shared/pkg/config"
 	"github.com/video-platform/shared/pkg/database/postgres"
 	"github.com/video-platform/shared/pkg/messaging/rabbitmq"
+	"github.com/video-platform/shared/pkg/metrics"
 	"gorm.io/gorm"
 )
 
@@ -26,6 +30,10 @@ func InitializeApp() *fx.App {
 	return fx.New(
 		fx.Provide(
 			config.Load,
+
+			func() *metrics.Metrics {
+				return metrics.NewMetrics("notification")
+			},
 
 			func(cfg *config.Config) (*gorm.DB, error) {
 				return postgres.NewPostgresDB(cfg.DatabaseURL)
@@ -67,6 +75,10 @@ func startWorker(lc fx.Lifecycle, consumer *messaging.NotificationConsumer) {
 				if err := consumer.Start(ctx); err != nil {
 					log.Printf("Worker error: %v", err)
 				}
+			}()
+			go func() {
+				log.Println("Starting metrics server on :8080")
+				http.ListenAndServe(":8080", promhttp.Handler())
 			}()
 			return nil
 		},

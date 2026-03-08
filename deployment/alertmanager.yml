@@ -1,6 +1,6 @@
 global:
   resolve_timeout: 5m
-  smtp_smarthost: '${SMTP_HOST:-smtp.gmail.com}:${SMTP_PORT:-587}'
+  smtp_smarthost: '${SMTP_HOST}:${SMTP_PORT}'
   smtp_from: '${SMTP_USER}'
   smtp_auth_username: '${SMTP_USER}'
   smtp_auth_password: '${SMTP_PASSWORD}'
@@ -23,7 +23,7 @@ route:
 receivers:
   - name: 'email-notifications'
     email_configs:
-      - to: '${ALERT_EMAIL:-admin@example.com}'
+      - to: '${ALERT_EMAIL}'
         headers:
           Subject: '[Video Platform] {{ .GroupLabels.alertname }}'
         html: |
@@ -35,7 +35,7 @@ receivers:
 
   - name: 'email-critical'
     email_configs:
-      - to: '${ALERT_EMAIL:-admin@example.com}'
+      - to: '${ALERT_EMAIL}'
         headers:
           Subject: '[CRITICAL] [Video Platform] {{ .GroupLabels.alertname }}'
         html: |
@@ -48,7 +48,7 @@ receivers:
 
   - name: 'email-warnings'
     email_configs:
-      - to: '${ALERT_EMAIL:-admin@example.com}'
+      - to: '${ALERT_EMAIL}'
         headers:
           Subject: '[WARNING] [Video Platform] {{ .GroupLabels.alertname }}'
         html: |
