@@ -3,6 +3,7 @@ package controller
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -11,21 +12,25 @@ import (
 	"github.com/video-platform/services/api-gateway/internal/presenter"
 	"github.com/video-platform/services/api-gateway/internal/usecase/commands"
 	"github.com/video-platform/shared/pkg/auth/jwt"
+	"github.com/video-platform/shared/pkg/metrics"
 	"github.com/video-platform/shared/pkg/rest"
 )
 
 type VideoHTTPController struct {
 	controller controller.VideoController
 	presenter  presenter.VideoPresenter
+	metrics    *metrics.Metrics
 }
 
 func NewVideoHTTPController(
 	controller controller.VideoController,
 	presenter presenter.VideoPresenter,
+	m *metrics.Metrics,
 ) *VideoHTTPController {
 	return &VideoHTTPController{
 		controller: controller,
 		presenter:  presenter,
+		metrics:    m,
 	}
 }
 
@@ -49,6 +54,9 @@ func (h *VideoHTTPController) RegisterRoutes(r chi.Router, jwtManager jwt.JWTMan
 // @Security BearerAuth
 // @Router /videos/upload [post]
 func (h *VideoHTTPController) Upload(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	h.metrics.HTTPRequestsInFlight.Inc()
+	defer h.metrics.HTTPRequestsInFlight.Dec()
 	claims, ok := jwt.GetClaimsFromContext(r.Context())
 	if !ok {
 		rest.RespondError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing authentication")
@@ -69,6 +77,7 @@ func (h *VideoHTTPController) Upload(w http.ResponseWriter, r *http.Request) {
 
 	cmd := commands.UploadCommand{
 		UserID:      claims.UserID,
+		UserEmail:   claims.Email,
 		Filename:    header.Filename,
 		ContentType: header.Header.Get("Content-Type"),
 		FileSize:    header.Size,
@@ -77,10 +86,14 @@ func (h *VideoHTTPController) Upload(w http.ResponseWriter, r *http.Request) {
 
 	output, err := h.controller.Upload(r.Context(), cmd)
 	if err != nil {
+		h.metrics.HTTPRequestsTotal.WithLabelValues("POST", "/videos/upload", "400").Inc()
+		h.metrics.HTTPRequestDuration.WithLabelValues("POST", "/videos/upload").Observe(time.Since(start).Seconds())
 		rest.RespondError(w, http.StatusBadRequest, "UPLOAD_FAILED", err.Error())
 		return
 	}
 
+	h.metrics.HTTPRequestsTotal.WithLabelValues("POST", "/videos/upload", "201").Inc()
+	h.metrics.HTTPRequestDuration.WithLabelValues("POST", "/videos/upload").Observe(time.Since(start).Seconds())
 	var response *dto.UploadResponse = h.presenter.PresentUpload(output)
 	rest.RespondCreated(w, response)
 }
@@ -99,6 +112,9 @@ func (h *VideoHTTPController) Upload(w http.ResponseWriter, r *http.Request) {
 // @Security BearerAuth
 // @Router /videos [get]
 func (h *VideoHTTPController) List(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	h.metrics.HTTPRequestsInFlight.Inc()
+	defer h.metrics.HTTPRequestsInFlight.Dec()
 	claims, ok := jwt.GetClaimsFromContext(r.Context())
 	if !ok {
 		rest.RespondError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing authentication")
@@ -123,10 +139,14 @@ func (h *VideoHTTPController) List(w http.ResponseWriter, r *http.Request) {
 
 	output, err := h.controller.List(r.Context(), cmd)
 	if err != nil {
+		h.metrics.HTTPRequestsTotal.WithLabelValues("GET", "/videos", "500").Inc()
+		h.metrics.HTTPRequestDuration.WithLabelValues("GET", "/videos").Observe(time.Since(start).Seconds())
 		rest.RespondError(w, http.StatusInternalServerError, "LIST_FAILED", err.Error())
 		return
 	}
 
+	h.metrics.HTTPRequestsTotal.WithLabelValues("GET", "/videos", "200").Inc()
+	h.metrics.HTTPRequestDuration.WithLabelValues("GET", "/videos").Observe(time.Since(start).Seconds())
 	var response *dto.ListResponse = h.presenter.PresentList(output)
 	rest.RespondSuccess(w, response)
 }
@@ -145,6 +165,9 @@ func (h *VideoHTTPController) List(w http.ResponseWriter, r *http.Request) {
 // @Security BearerAuth
 // @Router /videos/{id}/status [get]
 func (h *VideoHTTPController) Status(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	h.metrics.HTTPRequestsInFlight.Inc()
+	defer h.metrics.HTTPRequestsInFlight.Dec()
 	claims, ok := jwt.GetClaimsFromContext(r.Context())
 	if !ok {
 		rest.RespondError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing authentication")
@@ -165,10 +188,14 @@ func (h *VideoHTTPController) Status(w http.ResponseWriter, r *http.Request) {
 
 	output, err := h.controller.Status(r.Context(), cmd)
 	if err != nil {
+		h.metrics.HTTPRequestsTotal.WithLabelValues("GET", "/videos/{id}/status", "404").Inc()
+		h.metrics.HTTPRequestDuration.WithLabelValues("GET", "/videos/{id}/status").Observe(time.Since(start).Seconds())
 		rest.RespondError(w, http.StatusNotFound, "NOT_FOUND", err.Error())
 		return
 	}
 
+	h.metrics.HTTPRequestsTotal.WithLabelValues("GET", "/videos/{id}/status", "200").Inc()
+	h.metrics.HTTPRequestDuration.WithLabelValues("GET", "/videos/{id}/status").Observe(time.Since(start).Seconds())
 	var response *dto.StatusResponse = h.presenter.PresentStatus(output)
 	rest.RespondSuccess(w, response)
 }
@@ -187,6 +214,9 @@ func (h *VideoHTTPController) Status(w http.ResponseWriter, r *http.Request) {
 // @Security BearerAuth
 // @Router /videos/{id}/download [get]
 func (h *VideoHTTPController) Download(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	h.metrics.HTTPRequestsInFlight.Inc()
+	defer h.metrics.HTTPRequestsInFlight.Dec()
 	claims, ok := jwt.GetClaimsFromContext(r.Context())
 	if !ok {
 		rest.RespondError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing authentication")
@@ -207,10 +237,14 @@ func (h *VideoHTTPController) Download(w http.ResponseWriter, r *http.Request) {
 
 	output, err := h.controller.Download(r.Context(), cmd)
 	if err != nil {
+		h.metrics.HTTPRequestsTotal.WithLabelValues("GET", "/videos/{id}/download", "400").Inc()
+		h.metrics.HTTPRequestDuration.WithLabelValues("GET", "/videos/{id}/download").Observe(time.Since(start).Seconds())
 		rest.RespondError(w, http.StatusBadRequest, "DOWNLOAD_FAILED", err.Error())
 		return
 	}
 
+	h.metrics.HTTPRequestsTotal.WithLabelValues("GET", "/videos/{id}/download", "200").Inc()
+	h.metrics.HTTPRequestDuration.WithLabelValues("GET", "/videos/{id}/download").Observe(time.Since(start).Seconds())
 	var response *dto.DownloadResponse = h.presenter.PresentDownload(output)
 	rest.RespondSuccess(w, response)
 }

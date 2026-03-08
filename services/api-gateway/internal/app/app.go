@@ -27,6 +27,7 @@ import (
 	"github.com/video-platform/shared/pkg/config"
 	"github.com/video-platform/shared/pkg/database/postgres"
 	"github.com/video-platform/shared/pkg/messaging/rabbitmq"
+	"github.com/video-platform/shared/pkg/metrics"
 	"github.com/video-platform/shared/pkg/storage/s3"
 )
 
@@ -34,6 +35,10 @@ func InitializeApp() *fx.App {
 	return fx.New(
 		fx.Provide(
 			config.Load,
+
+			func() *metrics.Metrics {
+				return metrics.NewMetrics("api-gateway")
+			},
 
 			func(cfg *config.Config) (*gorm.DB, error) {
 				return postgres.NewPostgresDB(cfg.DatabaseURL)

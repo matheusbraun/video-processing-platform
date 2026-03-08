@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/video-platform/services/processing-worker/internal/domain/entities"
@@ -15,6 +16,7 @@ import (
 	"github.com/video-platform/services/processing-worker/internal/usecase/commands"
 	"github.com/video-platform/shared/pkg/logging"
 	"github.com/video-platform/shared/pkg/messaging/rabbitmq"
+	"github.com/video-platform/shared/pkg/metrics"
 	"github.com/video-platform/shared/pkg/storage/s3"
 )
 
@@ -24,6 +26,7 @@ type processUseCaseImpl struct {
 	ffmpegService   ffmpeg.FFmpegService
 	publisher       rabbitmq.Publisher
 	processedBucket string
+	metrics         *metrics.Metrics
 }
 
 func NewProcessUseCase(
@@ -32,6 +35,7 @@ func NewProcessUseCase(
 	ffmpegService ffmpeg.FFmpegService,
 	publisher rabbitmq.Publisher,
 	processedBucket string,
+	m *metrics.Metrics,
 ) ProcessUseCase {
 	return &processUseCaseImpl{
 		videoRepo:       videoRepo,
@@ -39,11 +43,14 @@ func NewProcessUseCase(
 		ffmpegService:   ffmpegService,
 		publisher:       publisher,
 		processedBucket: processedBucket,
+		metrics:         m,
 	}
 }
 
 func (uc *processUseCaseImpl) Execute(ctx context.Context, cmd commands.ProcessCommand) error {
 	logging.Info("Starting video processing", "video_id", cmd.VideoID)
+	start := time.Now()
+	uc.metrics.VideosTotal.WithLabelValues("processing").Inc()
 
 	if err := uc.videoRepo.MarkAsStarted(ctx, cmd.VideoID); err != nil {
 		return fmt.Errorf("failed to mark as started: %w", err)
@@ -55,76 +62,78 @@ func (uc *processUseCaseImpl) Execute(ctx context.Context, cmd commands.ProcessC
 
 	tmpDir, err := os.MkdirTemp("", "video-processing-*")
 	if err != nil {
-		return uc.handleError(ctx, cmd.VideoID, fmt.Errorf("failed to create temp dir: %w", err))
+		return uc.handleError(ctx, cmd.VideoID, cmd.UserID, cmd.UserEmail, fmt.Errorf("failed to create temp dir: %w", err))
 	}
 	defer os.RemoveAll(tmpDir)
 
 	videoPath := filepath.Join(tmpDir, cmd.Filename)
 	framesDir := filepath.Join(tmpDir, "frames")
 	if err := os.MkdirAll(framesDir, 0755); err != nil {
-		return uc.handleError(ctx, cmd.VideoID, fmt.Errorf("failed to create frames dir: %w", err))
+		return uc.handleError(ctx, cmd.VideoID, cmd.UserID, cmd.UserEmail, fmt.Errorf("failed to create frames dir: %w", err))
 	}
 
 	logging.Info("Downloading video from S3", "s3_key", cmd.S3Key)
 	videoFile, err := os.Create(videoPath)
 	if err != nil {
-		return uc.handleError(ctx, cmd.VideoID, fmt.Errorf("failed to create video file: %w", err))
+		return uc.handleError(ctx, cmd.VideoID, cmd.UserID, cmd.UserEmail, fmt.Errorf("failed to create video file: %w", err))
 	}
 
 	videoReader, err := uc.s3Client.GetObject(ctx, "", cmd.S3Key)
 	if err != nil {
 		videoFile.Close()
-		return uc.handleError(ctx, cmd.VideoID, fmt.Errorf("failed to download video: %w", err))
+		return uc.handleError(ctx, cmd.VideoID, cmd.UserID, cmd.UserEmail, fmt.Errorf("failed to download video: %w", err))
 	}
 	defer videoReader.Close()
 
 	if _, err := videoFile.ReadFrom(videoReader); err != nil {
 		videoFile.Close()
-		return uc.handleError(ctx, cmd.VideoID, fmt.Errorf("failed to write video file: %w", err))
+		return uc.handleError(ctx, cmd.VideoID, cmd.UserID, cmd.UserEmail, fmt.Errorf("failed to write video file: %w", err))
 	}
 	videoFile.Close()
 
 	logging.Info("Extracting frames with FFmpeg", "video_id", cmd.VideoID)
 	frameCount, err := uc.ffmpegService.ExtractFrames(ctx, videoPath, framesDir, 1)
 	if err != nil {
-		return uc.handleError(ctx, cmd.VideoID, fmt.Errorf("failed to extract frames: %w", err))
+		return uc.handleError(ctx, cmd.VideoID, cmd.UserID, cmd.UserEmail, fmt.Errorf("failed to extract frames: %w", err))
 	}
 
 	logging.Info("Extracted frames", "count", frameCount)
+	uc.metrics.FramesExtracted.Add(float64(frameCount))
 
 	logging.Info("Uploading frames to S3", "video_id", cmd.VideoID)
 	s3Prefix := fmt.Sprintf("processed/%s/frames/", cmd.VideoID)
 	if err := uc.uploadFrames(ctx, framesDir, s3Prefix); err != nil {
-		return uc.handleError(ctx, cmd.VideoID, fmt.Errorf("failed to upload frames: %w", err))
+		return uc.handleError(ctx, cmd.VideoID, cmd.UserID, cmd.UserEmail, fmt.Errorf("failed to upload frames: %w", err))
 	}
 
 	logging.Info("Creating ZIP archive", "video_id", cmd.VideoID)
 	zipLocalPath := filepath.Join(tmpDir, cmd.Filename+".zip")
 	if err := createZip(framesDir, zipLocalPath); err != nil {
-		return uc.handleError(ctx, cmd.VideoID, fmt.Errorf("failed to create zip: %w", err))
+		return uc.handleError(ctx, cmd.VideoID, cmd.UserID, cmd.UserEmail, fmt.Errorf("failed to create zip: %w", err))
 	}
 
 	logging.Info("Uploading ZIP to S3", "video_id", cmd.VideoID)
 	zipS3Key := fmt.Sprintf("processed/%s/%s.zip", cmd.VideoID, cmd.Filename)
 	zipFile, err := os.Open(zipLocalPath)
 	if err != nil {
-		return uc.handleError(ctx, cmd.VideoID, fmt.Errorf("failed to open zip: %w", err))
+		return uc.handleError(ctx, cmd.VideoID, cmd.UserID, cmd.UserEmail, fmt.Errorf("failed to open zip: %w", err))
 	}
 	defer zipFile.Close()
 
 	if err := uc.s3Client.Upload(ctx, uc.processedBucket, zipS3Key, zipFile); err != nil {
-		return uc.handleError(ctx, cmd.VideoID, fmt.Errorf("failed to upload zip: %w", err))
+		return uc.handleError(ctx, cmd.VideoID, cmd.UserID, cmd.UserEmail, fmt.Errorf("failed to upload zip: %w", err))
 	}
 
 	zipPath := zipS3Key
 
 	if err := uc.videoRepo.UpdateProcessingComplete(ctx, cmd.VideoID, frameCount, zipPath); err != nil {
-		return uc.handleError(ctx, cmd.VideoID, fmt.Errorf("failed to update completion: %w", err))
+		return uc.handleError(ctx, cmd.VideoID, cmd.UserID, cmd.UserEmail, fmt.Errorf("failed to update completion: %w", err))
 	}
 
 	notificationMsg := map[string]interface{}{
 		"video_id":    cmd.VideoID.String(),
 		"user_id":     cmd.UserID,
+		"user_email":  cmd.UserEmail,
 		"status":      "COMPLETED",
 		"frame_count": frameCount,
 	}
@@ -133,6 +142,8 @@ func (uc *processUseCaseImpl) Execute(ctx context.Context, cmd commands.ProcessC
 		logging.Error("Failed to publish notification", "error", err)
 	}
 
+	uc.metrics.VideosTotal.WithLabelValues("completed").Inc()
+	uc.metrics.VideoProcessingDuration.WithLabelValues("full_pipeline").Observe(time.Since(start).Seconds())
 	logging.Info("Video processing completed", "video_id", cmd.VideoID, "frame_count", frameCount)
 	return nil
 }
@@ -202,8 +213,9 @@ func (uc *processUseCaseImpl) uploadFrames(ctx context.Context, framesDir, s3Pre
 	return nil
 }
 
-func (uc *processUseCaseImpl) handleError(ctx context.Context, videoID uuid.UUID, err error) error {
+func (uc *processUseCaseImpl) handleError(ctx context.Context, videoID uuid.UUID, userID int64, userEmail string, err error) error {
 	logging.Error("Video processing failed", "video_id", videoID, "error", err)
+	uc.metrics.VideosTotal.WithLabelValues("failed").Inc()
 
 	errMsg := err.Error()
 	if updateErr := uc.videoRepo.UpdateStatus(ctx, videoID, entities.StatusFailed, &errMsg); updateErr != nil {
@@ -212,6 +224,8 @@ func (uc *processUseCaseImpl) handleError(ctx context.Context, videoID uuid.UUID
 
 	notificationMsg := map[string]interface{}{
 		"video_id":      videoID.String(),
+		"user_id":       userID,
+		"user_email":    userEmail,
 		"status":        "FAILED",
 		"error_message": errMsg,
 	}

@@ -3,30 +3,35 @@ package messaging
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/video-platform/services/processing-worker/internal/controller"
 	"github.com/video-platform/services/processing-worker/internal/usecase/commands"
 	"github.com/video-platform/shared/pkg/logging"
 	"github.com/video-platform/shared/pkg/messaging/rabbitmq"
+	"github.com/video-platform/shared/pkg/metrics"
 )
 
 type VideoJobMessage struct {
-	VideoID  string `json:"video_id"`
-	UserID   int64  `json:"user_id"`
-	S3Key    string `json:"s3_key"`
-	Filename string `json:"filename"`
+	VideoID   string `json:"video_id"`
+	UserID    int64  `json:"user_id"`
+	UserEmail string `json:"user_email"`
+	S3Key     string `json:"s3_key"`
+	Filename  string `json:"filename"`
 }
 
 type VideoConsumer struct {
 	consumer   *rabbitmq.Consumer
 	controller controller.WorkerController
+	metrics    *metrics.Metrics
 }
 
-func NewVideoConsumer(consumer *rabbitmq.Consumer, controller controller.WorkerController) *VideoConsumer {
+func NewVideoConsumer(consumer *rabbitmq.Consumer, controller controller.WorkerController, m *metrics.Metrics) *VideoConsumer {
 	return &VideoConsumer{
 		consumer:   consumer,
 		controller: controller,
+		metrics:    m,
 	}
 }
 
@@ -34,6 +39,9 @@ func (vc *VideoConsumer) Start(ctx context.Context) error {
 	logging.Info("Starting video processing consumer")
 
 	return vc.consumer.Consume(ctx, "video.processing.queue", func(body []byte) error {
+		start := time.Now()
+		vc.metrics.QueueMessagesInFlight.Inc()
+		defer vc.metrics.QueueMessagesInFlight.Dec()
 		var msg VideoJobMessage
 		if err := json.Unmarshal(body, &msg); err != nil {
 			logging.Error("Failed to unmarshal message", "error", err)
@@ -47,19 +55,24 @@ func (vc *VideoConsumer) Start(ctx context.Context) error {
 		}
 
 		cmd := commands.ProcessCommand{
-			VideoID:  videoID,
-			UserID:   msg.UserID,
-			S3Key:    msg.S3Key,
-			Filename: msg.Filename,
+			VideoID:   videoID,
+			UserID:    msg.UserID,
+			UserEmail: msg.UserEmail,
+			S3Key:     msg.S3Key,
+			Filename:  msg.Filename,
 		}
 
 		logging.Info("Processing video job", "video_id", videoID)
 
 		if err := vc.controller.ProcessVideo(ctx, cmd); err != nil {
 			logging.Error("Failed to process video", "video_id", videoID, "error", err)
+			vc.metrics.QueueMessagesProcessed.WithLabelValues("video.processing.queue", "failed").Inc()
+			vc.metrics.QueueProcessingDuration.WithLabelValues("video.processing.queue").Observe(time.Since(start).Seconds())
 			return err
 		}
 
+		vc.metrics.QueueMessagesProcessed.WithLabelValues("video.processing.queue", "success").Inc()
+		vc.metrics.QueueProcessingDuration.WithLabelValues("video.processing.queue").Observe(time.Since(start).Seconds())
 		return nil
 	})
 }

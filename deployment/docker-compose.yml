@@ -376,6 +376,36 @@ services:
       - video-platform
     restart: unless-stopped
 
+  # Node Exporter - Export host OS metrics (CPU, memory, disk, network)
+  # Configurado para Docker Desktop (WSL2): sem pid:host e sem rslave
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: video-platform-node-exporter
+    ports:
+      - "9100:9100"
+    networks:
+      - video-platform
+    restart: unless-stopped
+
+  # cAdvisor - Export Docker container metrics (CPU, memory per container)
+  # Configurado para Docker Desktop (WSL2): usa Docker socket em vez de /var/lib/docker
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: video-platform-cadvisor
+    privileged: true
+    devices:
+      - /dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - "8090:8080"
+    networks:
+      - video-platform
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   redis_data:

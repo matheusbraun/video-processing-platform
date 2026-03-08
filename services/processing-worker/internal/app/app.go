@@ -21,6 +21,7 @@ import (
 	"github.com/video-platform/shared/pkg/config"
 	"github.com/video-platform/shared/pkg/database/postgres"
 	"github.com/video-platform/shared/pkg/messaging/rabbitmq"
+	"github.com/video-platform/shared/pkg/metrics"
 	"github.com/video-platform/shared/pkg/storage/s3"
 	"gorm.io/gorm"
 )
@@ -29,6 +30,10 @@ func InitializeApp() *fx.App {
 	return fx.New(
 		fx.Provide(
 			config.Load,
+
+			func() *metrics.Metrics {
+				return metrics.NewMetrics("processing-worker")
+			},
 
 			func(cfg *config.Config) (*gorm.DB, error) {
 				return postgres.NewPostgresDB(cfg.DatabaseURL)
@@ -56,8 +61,9 @@ func InitializeApp() *fx.App {
 				ffmpegService ffmpeg.FFmpegService,
 				publisher rabbitmq.Publisher,
 				cfg *config.Config,
+				m *metrics.Metrics,
 			) process.ProcessUseCase {
-				return process.NewProcessUseCase(videoRepo, s3Client, ffmpegService, publisher, cfg.S3ProcessedBucket)
+				return process.NewProcessUseCase(videoRepo, s3Client, ffmpegService, publisher, cfg.S3ProcessedBucket, m)
 			},
 
 			fx.Annotate(controller.NewWorkerController, fx.As(new(controller.WorkerController))),
