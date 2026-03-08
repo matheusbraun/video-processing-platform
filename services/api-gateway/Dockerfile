@@ -14,6 +14,10 @@ WORKDIR /app/services/api-gateway
 
 RUN go mod download
 
+# Generate Swagger docs
+RUN go install github.com/swaggo/swag/cmd/swag@latest \
+    && swag init -g cmd/server/main.go --output docs --parseDependency --parseInternal
+
 # Build the application
 RUN CGO_ENABLED=0 GOOS=linux go build -o /api-gateway cmd/server/main.go
 

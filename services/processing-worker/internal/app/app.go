@@ -32,7 +32,7 @@ func InitializeApp() *fx.App {
 			},
 
 			func(cfg *config.Config) (s3.S3Client, error) {
-				return s3.NewS3Client(cfg.AWSRegion, cfg.AWSAccessKeyID, cfg.AWSSecretAccessKey, cfg.S3UploadsBucket)
+				return s3.NewS3Client(cfg.AWSRegion, cfg.AWSAccessKeyID, cfg.AWSSecretAccessKey, cfg.S3EndpointURL, cfg.S3UploadsBucket)
 			},
 
 			func(cfg *config.Config) (*rabbitmq.Consumer, error) {

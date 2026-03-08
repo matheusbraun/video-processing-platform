@@ -36,6 +36,7 @@ func main() {
 		cfg.AWSRegion,
 		cfg.AWSAccessKeyID,
 		cfg.AWSSecretAccessKey,
+		cfg.S3EndpointURL,
 		cfg.S3UploadsBucket,
 	)
 	if err != nil {

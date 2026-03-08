@@ -1,0 +1,407 @@
+# =============================================================================
+# Video Processing Platform — Fluxo Completo com REST Client
+# =============================================================================
+#
+# Pré-requisito: instale a extensão "REST Client" (humao.rest-client) no VS Code
+#
+# Fluxo de uso:
+#   1. Ajuste as variáveis em "Environment Variables"
+#   2. Execute "1.1 Register" (ou pule se já tiver conta)
+#   3. Execute "1.2 Login" — access_token e refresh_token são capturados
+#   4. Execute "2.1 Upload Video" apontando para um arquivo local
+#   5. Execute "3.1 Get Video Status" — repita até status = "COMPLETED"
+#   6. Execute "3.2 List My Videos" para ver todos os vídeos do usuário
+#   7. Execute "4.1 Get Download URL" quando status = COMPLETED
+#   8. Execute "1.3 Refresh Token" quando necessário (token expira em 15 min)
+#   9. Execute "1.4 Logout" para encerrar a sessão
+#
+# =============================================================================
+
+
+# ---------------------------------------------------------------------------
+# Environment Variables
+# ---------------------------------------------------------------------------
+@authBaseUrl  = http://localhost:8081
+@apiBaseUrl   = http://localhost:8080
+
+# Preenchidos manualmente para testes rápidos
+# (ou capturados automaticamente após Login — veja instruções abaixo)
+@accessToken  = REPLACE_WITH_ACCESS_TOKEN
+@refreshToken = REPLACE_WITH_REFRESH_TOKEN
+@videoId      = REPLACE_WITH_VIDEO_ID
+
+
+# =============================================================================
+# 1. AUTENTICAÇÃO
+# =============================================================================
+
+### 1.1 Register — Criar novo usuário
+# @name register
+POST {{authBaseUrl}}/api/v1/auth/register
+Content-Type: application/json
+
+{
+  "username": "john_doe",
+  "email": "john@example.com",
+  "password": "supersecret123"
+}
+
+###
+# Resposta esperada (201 Created):
+# {
+#   "data": {
+#     "user_id":  42,
+#     "username": "john_doe",
+#     "email":    "john@example.com"
+#   }
+# }
+
+
+### 1.2 Login — Obter access_token e refresh_token
+# @name login
+POST {{authBaseUrl}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "john@example.com",
+  "password": "supersecret123"
+}
+
+###
+# Resposta esperada (200 OK):
+# {
+#   "data": {
+#     "access_token":  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+#     "refresh_token": "a3f1c2d4-e5b6-7890-abcd-ef1234567890",
+#     "expires_in":    900,
+#     "user": {
+#       "user_id":  42,
+#       "username": "john_doe",
+#       "email":    "john@example.com"
+#     }
+#   }
+# }
+#
+# Para capturar os tokens dinamicamente no REST Client, descomente as linhas:
+@accessToken  = {{login.response.body.data.access_token}}
+@refreshToken = {{login.response.body.data.refresh_token}}
+
+
+### 1.3 Refresh Token — Renovar access_token sem fazer login novamente
+# Execute quando receber 401 UNAUTHORIZED nas chamadas à API Gateway
+# @name tokenRefresh
+POST {{authBaseUrl}}/api/v1/auth/refresh
+Content-Type: application/json
+
+{
+  "refresh_token": "{{refreshToken}}"
+}
+
+###
+# Resposta esperada (200 OK):
+# {
+#   "data": {
+#     "access_token":  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+#     "refresh_token": "b4g2d3e5-f6c7-8901-bcde-fg2345678901",
+#     "expires_in":    900
+#   }
+# }
+#
+# Atualize o accessToken após executar:
+# @accessToken = {{tokenRefresh.response.body.data.access_token}}
+
+
+### 1.4 Logout — Invalidar tokens (blacklist JWT no Redis + deletar refresh do DB)
+POST {{authBaseUrl}}/api/v1/auth/logout
+Content-Type: application/json
+
+{
+  "refresh_token": "{{refreshToken}}"
+}
+
+###
+# Resposta esperada (200 OK):
+# {
+#   "data": {
+#     "message": "logged out successfully"
+#   }
+# }
+#
+# Após logout:
+# - O refresh_token é removido da tabela auth.refresh_tokens (PostgreSQL)
+# - O jti do access_token é adicionado ao Redis com TTL de 15 minutos
+# - Qualquer requisição com esses tokens retornará 401 UNAUTHORIZED
+
+
+# =============================================================================
+# 2. UPLOAD DE VÍDEO
+# =============================================================================
+
+### 2.1 Upload — Enviar vídeo para processamento assíncrono (multipart/form-data)
+# @name uploadVideo
+#
+# Substitua o caminho abaixo pelo caminho real do vídeo no seu sistema.
+# Formatos aceitos: .mp4, .avi, .mov, .mkv, .webm (máximo 500 MB)
+POST {{apiBaseUrl}}/api/v1/videos/upload
+Authorization: Bearer {{accessToken}}
+Content-Type: multipart/form-data; boundary=----VideoUploadBoundary
+
+------VideoUploadBoundary
+Content-Disposition: form-data; name="video"; filename="sample.mp4"
+Content-Type: video/mp4
+
+< ./sample.mp4
+------VideoUploadBoundary--
+
+###
+# Resposta esperada (201 Created / 202 Accepted):
+# {
+#   "data": {
+#     "video_id": "550e8400-e29b-41d4-a716-446655440000",
+#     "filename": "sample.mp4",
+#     "status":   "PENDING"
+#   }
+# }
+#
+# O que acontece internamente após o upload:
+#   1. JWT validado pelo middleware
+#   2. Arquivo enviado ao S3: uploads/{video_id}/sample.mp4
+#   3. Registro criado no DB: status=PENDING, expires_at=NOW+15d
+#   4. Mensagem publicada na fila RabbitMQ: video.processing.queue
+#   5. Resposta retornada imediatamente (processamento é assíncrono)
+#
+# Capture o video_id para as próximas requisições:
+@videoId = {{uploadVideo.response.body.data.video_id}}
+
+
+# =============================================================================
+# 3. MONITORAMENTO DO PROCESSAMENTO
+# =============================================================================
+
+### 3.1 Get Video Status — Verificar status do processamento
+# Repita a cada ~3 segundos enquanto status for PENDING ou PROCESSING
+GET {{apiBaseUrl}}/api/v1/videos/{{videoId}}/status
+Authorization: Bearer {{accessToken}}
+
+###
+# Possíveis respostas durante o ciclo de vida:
+#
+# status = PENDING (aguardando na fila RabbitMQ):
+# {
+#   "data": {
+#     "video_id":      "550e8400-e29b-41d4-a716-446655440000",
+#     "filename":      "sample.mp4",
+#     "status":        "PENDING",
+#     "frame_count":   null,
+#     "error_message": null,
+#     "created_at":    "2026-03-08T10:30:00Z",
+#     "started_at":    null,
+#     "completed_at":  null
+#   }
+# }
+#
+# status = PROCESSING (worker extraindo frames com FFmpeg):
+# {
+#   "data": {
+#     "video_id":      "550e8400-e29b-41d4-a716-446655440000",
+#     "status":        "PROCESSING",
+#     "frame_count":   null,
+#     "started_at":    "2026-03-08T10:32:00Z",
+#     "completed_at":  null
+#   }
+# }
+#
+# status = COMPLETED (ZIP criado e disponível para download):
+# {
+#   "data": {
+#     "video_id":      "550e8400-e29b-41d4-a716-446655440000",
+#     "status":        "COMPLETED",
+#     "frame_count":   142,
+#     "started_at":    "2026-03-08T10:32:00Z",
+#     "completed_at":  "2026-03-08T10:45:00Z"
+#   }
+# }
+#
+# status = FAILED (erro durante o processamento):
+# {
+#   "data": {
+#     "video_id":      "550e8400-e29b-41d4-a716-446655440000",
+#     "status":        "FAILED",
+#     "error_message": "FFmpeg error: invalid codec",
+#     "started_at":    "2026-03-08T10:32:00Z",
+#     "completed_at":  null
+#   }
+# }
+
+
+### 3.2 List My Videos — Listar todos os vídeos do usuário autenticado (paginado)
+GET {{apiBaseUrl}}/api/v1/videos?limit=20&offset=0
+Authorization: Bearer {{accessToken}}
+
+###
+# Resposta esperada (200 OK):
+# {
+#   "data": {
+#     "videos": [
+#       {
+#         "id":           "550e8400-e29b-41d4-a716-446655440000",
+#         "filename":     "sample.mp4",
+#         "status":       "COMPLETED",
+#         "frame_count":  142,
+#         "created_at":   "2026-03-08T10:30:00Z",
+#         "completed_at": "2026-03-08T10:45:00Z"
+#       },
+#       {
+#         "id":           "660e8400-e29b-41d4-a716-446655440001",
+#         "filename":     "outro-video.mov",
+#         "status":       "PROCESSING",
+#         "frame_count":  null,
+#         "created_at":   "2026-03-08T11:00:00Z",
+#         "completed_at": null
+#       }
+#     ],
+#     "total":    2,
+#     "limit":    20,
+#     "offset":   0,
+#     "has_more": false
+#   }
+# }
+
+
+# =============================================================================
+# 4. DOWNLOAD DO ZIP DE FRAMES
+# =============================================================================
+
+### 4.1 Get Download URL — Gerar presigned URL do S3 (válida por 15 minutos)
+# Só disponível quando status = "COMPLETED"
+# @name getDownloadUrl
+GET {{apiBaseUrl}}/api/v1/videos/{{videoId}}/download
+Authorization: Bearer {{accessToken}}
+
+###
+# Resposta esperada (200 OK):
+# {
+#   "data": {
+#     "download_url": "https://s3.amazonaws.com/video-platform-processed/processed/550e8400.../sample.mp4.zip?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=...",
+#     "filename":     "sample.mp4.zip",
+#     "expires_in":   900
+#   }
+# }
+#
+# O download_url é uma presigned URL do S3 com TTL de 15 minutos.
+# Copie a URL e cole no browser — o browser baixará o ZIP diretamente do S3,
+# sem passar pelos serviços e sem necessidade de Authorization header.
+#
+# O ZIP contém os frames extraídos em 1 FPS:
+#   frame_0001.jpg
+#   frame_0002.jpg
+#   ...
+#   frame_0142.jpg
+
+
+### 4.2 Download ZIP via presigned URL — copie a URL COMPLETA do campo "download_url" em 4.1
+# ATENÇÃO: a presigned URL é longa e contém vários parâmetros após "?":
+#   X-Amz-Algorithm, X-Amz-Credential, X-Amz-Signature, X-Amz-Date, X-Amz-SignedHeaders, X-Amz-Expires
+# Se copiar a URL truncada (apenas ?X-Amz-Algorithm=...), receberá AuthorizationQueryParametersError.
+#
+# A URL interna usa hostname "localstack:4566" — troque por "localhost:4566" para abrir no browser:
+#   http://localstack:4566/video-platform-uploads/processed/{id}/sample.mp4.zip?X-Amz-Algorithm=... (interna)
+#   http://localhost:4566/video-platform-uploads/processed/{id}/sample.mp4.zip?X-Amz-Algorithm=...  (host)
+#
+# Cole a URL completa abaixo (descomente a linha GET e substitua a URL):
+# GET http://localhost:4566/video-platform-uploads/processed/{video_id}/sample.mp4.zip?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=...&X-Amz-Date=...&X-Amz-Expires=...&X-Amz-SignedHeaders=host&X-Amz-Signature=...
+
+
+### 4.3 Listar arquivos do vídeo processado no LocalStack (verificação)
+GET http://localhost:4566/video-platform-processed?prefix=processed/{{videoId}}/
+
+
+### 4.4 Download direto do ZIP via LocalStack (sem presigned URL, apenas para dev)
+GET http://localhost:4566/video-platform-processed/processed/{{videoId}}/sample.mp4.zip
+
+
+# =============================================================================
+# 5. CENÁRIOS DE ERRO
+# =============================================================================
+
+### 5.1 Acesso sem token — Espera 401 UNAUTHORIZED
+GET {{apiBaseUrl}}/api/v1/videos
+
+###
+
+### 5.2 Vídeo inexistente — Espera 404 NOT_FOUND
+GET {{apiBaseUrl}}/api/v1/videos/00000000-0000-0000-0000-000000000000/status
+Authorization: Bearer {{accessToken}}
+
+###
+
+### 5.3 Download antes de COMPLETED — Espera 400 DOWNLOAD_FAILED
+# (Altere o videoId para um vídeo com status PENDING ou PROCESSING)
+GET {{apiBaseUrl}}/api/v1/videos/{{videoId}}/download
+Authorization: Bearer {{accessToken}}
+
+###
+
+### 5.4 Login com credenciais inválidas — Espera 401 LOGIN_FAILED
+POST {{authBaseUrl}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "naoexiste@example.com",
+  "password": "senhaerrada"
+}
+
+###
+
+### 5.5 Registro com email duplicado — Espera 400 REGISTRATION_FAILED
+POST {{authBaseUrl}}/api/v1/auth/register
+Content-Type: application/json
+
+{
+  "username": "john_doe",
+  "email": "john@example.com",
+  "password": "supersecret123"
+}
+
+###
+
+### 5.6 Refresh com token inválido — Espera 401 REFRESH_FAILED
+POST {{authBaseUrl}}/api/v1/auth/refresh
+Content-Type: application/json
+
+{
+  "refresh_token": "invalid-token-that-does-not-exist"
+}
+
+
+# =============================================================================
+# 6. MONITORAMENTO DE INFRAESTRUTURA
+# =============================================================================
+
+### 6.1 RabbitMQ Management API — Listar filas e seus status
+# Usuário: video / Senha: secret (configurado no docker-compose.yml)
+GET http://localhost:15672/api/queues
+Authorization: Basic dmlkZW86c2VjcmV0
+
+###
+# Filas esperadas:
+#   - video.processing.queue  (durable, persistent — mensagens de upload)
+#   - video.notification.queue (durable, persistent — mensagens de conclusão/falha)
+
+
+### 6.2 RabbitMQ — Detalhes de uma fila específica
+GET http://localhost:15672/api/queues/%2F/video.processing.queue
+Authorization: Basic dmlkZW86c2VjcmV0
+
+###
+
+### 6.3 RabbitMQ — Mensagens na fila de processamento (peek sem consumir)
+POST http://localhost:15672/api/queues/%2F/video.processing.queue/get
+Authorization: Basic dmlkZW86c2VjcmV0
+Content-Type: application/json
+
+{
+  "count":    5,
+  "ackmode":  "ack_requeue_true",
+  "encoding": "auto"
+}

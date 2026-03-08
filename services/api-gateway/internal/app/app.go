@@ -42,7 +42,7 @@ func InitializeApp() *fx.App {
 			},
 
 			func(cfg *config.Config) (s3.S3Client, error) {
-				return s3.NewS3Client(cfg.AWSRegion, cfg.AWSAccessKeyID, cfg.AWSSecretAccessKey, cfg.S3UploadsBucket)
+				return s3.NewS3Client(cfg.AWSRegion, cfg.AWSAccessKeyID, cfg.AWSSecretAccessKey, cfg.S3EndpointURL, cfg.S3UploadsBucket)
 			},
 
 			func(cfg *config.Config) (rabbitmq.Publisher, error) {
@@ -54,7 +54,9 @@ func InitializeApp() *fx.App {
 			fx.Annotate(upload.NewUploadUseCase, fx.As(new(upload.UploadUseCase))),
 			fx.Annotate(list.NewListUseCase, fx.As(new(list.ListUseCase))),
 			fx.Annotate(status.NewStatusUseCase, fx.As(new(status.StatusUseCase))),
-			fx.Annotate(download.NewDownloadUseCase, fx.As(new(download.DownloadUseCase))),
+			func(cfg *config.Config, videoRepo repositories.VideoRepository, s3Client s3.S3Client) download.DownloadUseCase {
+				return download.NewDownloadUseCase(videoRepo, s3Client, cfg.S3ProcessedBucket, cfg.S3EndpointURL, cfg.S3PublicEndpointURL)
+			},
 
 			fx.Annotate(controller.NewVideoController, fx.As(new(controller.VideoController))),
 			fx.Annotate(presenter.NewVideoPresenter, fx.As(new(presenter.VideoPresenter))),

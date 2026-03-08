@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/video-platform/services/api-gateway/internal/controller"
+	"github.com/video-platform/services/api-gateway/internal/infrastructure/api/dto"
 	"github.com/video-platform/services/api-gateway/internal/presenter"
 	"github.com/video-platform/services/api-gateway/internal/usecase/commands"
 	"github.com/video-platform/shared/pkg/auth/jwt"
@@ -80,7 +81,7 @@ func (h *VideoHTTPController) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := h.presenter.PresentUpload(output)
+	var response *dto.UploadResponse = h.presenter.PresentUpload(output)
 	rest.RespondCreated(w, response)
 }
 
@@ -126,7 +127,7 @@ func (h *VideoHTTPController) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := h.presenter.PresentList(output)
+	var response *dto.ListResponse = h.presenter.PresentList(output)
 	rest.RespondSuccess(w, response)
 }
 
@@ -168,7 +169,7 @@ func (h *VideoHTTPController) Status(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := h.presenter.PresentStatus(output)
+	var response *dto.StatusResponse = h.presenter.PresentStatus(output)
 	rest.RespondSuccess(w, response)
 }
 
@@ -210,6 +211,6 @@ func (h *VideoHTTPController) Download(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := h.presenter.PresentDownload(output)
+	var response *dto.DownloadResponse = h.presenter.PresentDownload(output)
 	rest.RespondSuccess(w, response)
 }

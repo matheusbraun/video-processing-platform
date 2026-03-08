@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '@/lib/api';
+import { authApi } from '@/lib/api';
 import type { ApiResponse, AuthResponse, LoginRequest, RegisterRequest } from '@/lib/api.types';
 
 export function useLogin() {
@@ -7,7 +7,7 @@ export function useLogin() {
 
   return useMutation({
     mutationFn: async (credentials: LoginRequest) => {
-      const response = await api
+      const response = await authApi
         .post('api/v1/auth/login', { json: credentials })
         .json<ApiResponse<AuthResponse>>();
       return response.data;
@@ -24,7 +24,7 @@ export function useLogin() {
 export function useRegister() {
   return useMutation({
     mutationFn: async (credentials: RegisterRequest) => {
-      const response = await api
+      const response = await authApi
         .post('api/v1/auth/register', { json: credentials })
         .json<ApiResponse<{ user_id: number; username: string; email: string }>>();
       return response.data;
@@ -39,7 +39,7 @@ export function useLogout() {
     mutationFn: async () => {
       const refreshToken = localStorage.getItem('refresh_token');
       if (refreshToken) {
-        await api.post('api/v1/auth/logout', {
+        await authApi.post('api/v1/auth/logout', {
           json: { refresh_token: refreshToken },
         });
       }

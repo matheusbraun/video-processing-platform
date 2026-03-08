@@ -23,7 +23,7 @@ func InitializeApp() *fx.App {
 			config.Load,
 
 			func(cfg *config.Config) (s3.S3Client, error) {
-				return s3.NewS3Client(cfg.AWSRegion, cfg.AWSAccessKeyID, cfg.AWSSecretAccessKey, cfg.S3ProcessedBucket)
+				return s3.NewS3Client(cfg.AWSRegion, cfg.AWSAccessKeyID, cfg.AWSSecretAccessKey, cfg.S3EndpointURL, cfg.S3ProcessedBucket)
 			},
 
 			fx.Annotate(createzip.NewCreateZipUseCase, fx.As(new(createzip.CreateZipUseCase))),

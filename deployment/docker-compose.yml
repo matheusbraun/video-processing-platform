@@ -6,16 +6,16 @@ services:
     image: postgres:15-alpine
     container_name: video-platform-postgres
     environment:
-      POSTGRES_DB: video_platform
-      POSTGRES_USER: videoadmin
-      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ../scripts/migrations:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U videoadmin -d video_platform"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -44,8 +44,8 @@ services:
     image: rabbitmq:3-management-alpine
     container_name: video-platform-rabbitmq
     environment:
-      RABBITMQ_DEFAULT_USER: video
-      RABBITMQ_DEFAULT_PASS: secret
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
     ports:
       - "5672:5672"
       - "15672:15672"
@@ -59,6 +59,49 @@ services:
     networks:
       - video-platform
 
+  # LocalStack — S3 local para desenvolvimento
+  localstack:
+    image: localstack/localstack:latest
+    container_name: video-platform-localstack
+    environment:
+      SERVICES: s3
+      DEFAULT_REGION: ${AWS_REGION}
+      AWS_DEFAULT_REGION: ${AWS_REGION}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      LOCALSTACK_HOST: localstack
+    ports:
+      - "4566:4566"
+    volumes:
+      - localstack_data:/var/lib/localstack
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:4566/_localstack/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - video-platform
+
+  # Cria os buckets S3 no LocalStack após ele estar saudável
+  localstack-init:
+    image: amazon/aws-cli:latest
+    container_name: video-platform-localstack-init
+    environment:
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_DEFAULT_REGION: ${AWS_REGION}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        aws --endpoint-url=http://localstack:4566 s3 mb s3://${S3_UPLOADS_BUCKET}   --region ${AWS_REGION} || true
+        aws --endpoint-url=http://localstack:4566 s3 mb s3://${S3_PROCESSED_BUCKET} --region ${AWS_REGION} || true
+        echo "Buckets S3 criados com sucesso."
+    depends_on:
+      localstack:
+        condition: service_healthy
+    networks:
+      - video-platform
+
   # Auth Service
   auth-service:
     build:
@@ -67,11 +110,11 @@ services:
     container_name: video-platform-auth
     environment:
       SERVER_PORT: "8080"
-      DATABASE_URL: postgres://videoadmin:secret@postgres:5432/video_platform?sslmode=disable
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
       REDIS_URL: redis://redis:6379
-      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
-      JWT_ACCESS_EXPIRY: ${JWT_ACCESS_EXPIRY:-15m}
-      JWT_REFRESH_EXPIRY: ${JWT_REFRESH_EXPIRY:-168h}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ACCESS_EXPIRY: ${JWT_ACCESS_EXPIRY}
+      JWT_REFRESH_EXPIRY: ${JWT_REFRESH_EXPIRY}
     ports:
       - "8081:8080"
     depends_on:
@@ -91,17 +134,19 @@ services:
     container_name: video-platform-api-gateway
     environment:
       SERVER_PORT: "8080"
-      DATABASE_URL: postgres://videoadmin:secret@postgres:5432/video_platform?sslmode=disable
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
       REDIS_URL: redis://redis:6379
-      RABBITMQ_URL: amqp://video:secret@rabbitmq:5672/
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
       AUTH_SERVICE_URL: http://auth-service:8080
       STORAGE_SERVICE_URL: http://storage-service:8080
-      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
-      AWS_REGION: ${AWS_REGION:-us-east-1}
+      JWT_SECRET: ${JWT_SECRET}
+      AWS_REGION: ${AWS_REGION}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
-      S3_UPLOADS_BUCKET: ${S3_UPLOADS_BUCKET:-video-platform-uploads}
-      S3_PROCESSED_BUCKET: ${S3_PROCESSED_BUCKET:-video-platform-processed}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL}
+      S3_PUBLIC_ENDPOINT_URL: ${S3_PUBLIC_ENDPOINT_URL}
+      S3_UPLOADS_BUCKET: ${S3_UPLOADS_BUCKET}
+      S3_PROCESSED_BUCKET: ${S3_PROCESSED_BUCKET}
     ports:
       - "8080:8080"
     depends_on:
@@ -111,6 +156,8 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      localstack-init:
+        condition: service_completed_successfully
       auth-service:
         condition: service_started
     networks:
@@ -125,18 +172,21 @@ services:
     deploy:
       replicas: 3
     environment:
-      DATABASE_URL: postgres://videoadmin:secret@postgres:5432/video_platform?sslmode=disable
-      RABBITMQ_URL: amqp://video:secret@rabbitmq:5672/
-      AWS_REGION: ${AWS_REGION:-us-east-1}
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      AWS_REGION: ${AWS_REGION}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
-      S3_UPLOADS_BUCKET: ${S3_UPLOADS_BUCKET:-video-platform-uploads}
-      S3_PROCESSED_BUCKET: ${S3_PROCESSED_BUCKET:-video-platform-processed}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL}
+      S3_UPLOADS_BUCKET: ${S3_UPLOADS_BUCKET}
+      S3_PROCESSED_BUCKET: ${S3_PROCESSED_BUCKET}
     depends_on:
       postgres:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      localstack-init:
+        condition: service_completed_successfully
     networks:
       - video-platform
     restart: unless-stopped
@@ -149,17 +199,20 @@ services:
     container_name: video-platform-storage
     environment:
       SERVER_PORT: "8080"
-      DATABASE_URL: postgres://videoadmin:secret@postgres:5432/video_platform?sslmode=disable
-      AWS_REGION: ${AWS_REGION:-us-east-1}
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      AWS_REGION: ${AWS_REGION}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
-      S3_UPLOADS_BUCKET: ${S3_UPLOADS_BUCKET:-video-platform-uploads}
-      S3_PROCESSED_BUCKET: ${S3_PROCESSED_BUCKET:-video-platform-processed}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL}
+      S3_UPLOADS_BUCKET: ${S3_UPLOADS_BUCKET}
+      S3_PROCESSED_BUCKET: ${S3_PROCESSED_BUCKET}
     ports:
       - "8082:8080"
     depends_on:
       postgres:
         condition: service_healthy
+      localstack-init:
+        condition: service_completed_successfully
     networks:
       - video-platform
     restart: unless-stopped
@@ -171,10 +224,10 @@ services:
       dockerfile: services/notification/Dockerfile
     container_name: video-platform-notification
     environment:
-      DATABASE_URL: postgres://videoadmin:secret@postgres:5432/video_platform?sslmode=disable
-      RABBITMQ_URL: amqp://video:secret@rabbitmq:5672/
-      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
-      SMTP_PORT: ${SMTP_PORT:-587}
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
       SMTP_USER: ${SMTP_USER}
       SMTP_PASSWORD: ${SMTP_PASSWORD}
     depends_on:
@@ -193,7 +246,8 @@ services:
       dockerfile: ui/Dockerfile
     container_name: video-platform-ui
     environment:
-      VITE_API_URL: http://localhost:8080
+      VITE_API_URL: ${VITE_API_URL}
+      VITE_AUTH_URL: ${VITE_AUTH_URL}
     ports:
       - "3000:80"
     depends_on:
@@ -209,19 +263,22 @@ services:
       dockerfile: services/processing-worker/Dockerfile.cleanup
     container_name: video-platform-cleanup
     environment:
-      DATABASE_URL: postgres://videoadmin:secret@postgres:5432/video_platform?sslmode=disable
-      RABBITMQ_URL: amqp://video:secret@rabbitmq:5672/
-      AWS_REGION: ${AWS_REGION:-us-east-1}
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      AWS_REGION: ${AWS_REGION}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
-      S3_UPLOADS_BUCKET: ${S3_UPLOADS_BUCKET:-video-platform-uploads}
-      S3_PROCESSED_BUCKET: ${S3_PROCESSED_BUCKET:-video-platform-processed}
-      TZ: ${TZ:-UTC}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL}
+      S3_UPLOADS_BUCKET: ${S3_UPLOADS_BUCKET}
+      S3_PROCESSED_BUCKET: ${S3_PROCESSED_BUCKET}
+      TZ: ${TZ}
     depends_on:
       postgres:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      localstack-init:
+        condition: service_completed_successfully
     networks:
       - video-platform
     restart: unless-stopped
@@ -251,8 +308,9 @@ services:
     image: grafana/grafana:latest
     container_name: video-platform-grafana
     environment:
-      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+      - GF_SECURITY_ADMIN_EMAIL=${GRAFANA_EMAIL}
       - GF_USERS_ALLOW_SIGN_UP=false
     ports:
       - "3001:3000"
@@ -291,7 +349,7 @@ services:
     image: prometheuscommunity/postgres-exporter:latest
     container_name: video-platform-postgres-exporter
     environment:
-      DATA_SOURCE_NAME: postgresql://videoadmin:secret@postgres:5432/video_platform?sslmode=disable
+      DATA_SOURCE_NAME: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
     ports:
       - "9187:9187"
     depends_on:
@@ -320,6 +378,7 @@ volumes:
   postgres_data:
   redis_data:
   rabbitmq_data:
+  localstack_data:
   prometheus_data:
   grafana_data:
   alertmanager_data:

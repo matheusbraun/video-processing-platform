@@ -1,6 +1,7 @@
 import ky from 'ky';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+const AUTH_BASE_URL = import.meta.env.VITE_AUTH_URL || 'http://localhost:8081';
 
 export const api = ky.create({
   prefixUrl: API_BASE_URL,
@@ -21,7 +22,7 @@ export const api = ky.create({
           if (refreshToken) {
             try {
               const result = await ky
-                .post(`${API_BASE_URL}/api/v1/auth/refresh`, {
+                .post(`${AUTH_BASE_URL}/api/v1/auth/refresh`, {
                   json: { refresh_token: refreshToken },
                 })
                 .json<{
@@ -51,4 +52,9 @@ export const api = ky.create({
       },
     ],
   },
+});
+
+export const authApi = ky.create({
+  prefixUrl: AUTH_BASE_URL,
+  timeout: 30000,
 });

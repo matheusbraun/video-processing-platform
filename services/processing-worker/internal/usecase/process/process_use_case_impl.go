@@ -1,8 +1,10 @@
 package process
 
 import (
+	"archive/zip"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -96,7 +98,25 @@ func (uc *processUseCaseImpl) Execute(ctx context.Context, cmd commands.ProcessC
 		return uc.handleError(ctx, cmd.VideoID, fmt.Errorf("failed to upload frames: %w", err))
 	}
 
-	zipPath := fmt.Sprintf("processed/%s/%s.zip", cmd.VideoID, cmd.Filename)
+	logging.Info("Creating ZIP archive", "video_id", cmd.VideoID)
+	zipLocalPath := filepath.Join(tmpDir, cmd.Filename+".zip")
+	if err := createZip(framesDir, zipLocalPath); err != nil {
+		return uc.handleError(ctx, cmd.VideoID, fmt.Errorf("failed to create zip: %w", err))
+	}
+
+	logging.Info("Uploading ZIP to S3", "video_id", cmd.VideoID)
+	zipS3Key := fmt.Sprintf("processed/%s/%s.zip", cmd.VideoID, cmd.Filename)
+	zipFile, err := os.Open(zipLocalPath)
+	if err != nil {
+		return uc.handleError(ctx, cmd.VideoID, fmt.Errorf("failed to open zip: %w", err))
+	}
+	defer zipFile.Close()
+
+	if err := uc.s3Client.Upload(ctx, uc.processedBucket, zipS3Key, zipFile); err != nil {
+		return uc.handleError(ctx, cmd.VideoID, fmt.Errorf("failed to upload zip: %w", err))
+	}
+
+	zipPath := zipS3Key
 
 	if err := uc.videoRepo.UpdateProcessingComplete(ctx, cmd.VideoID, frameCount, zipPath); err != nil {
 		return uc.handleError(ctx, cmd.VideoID, fmt.Errorf("failed to update completion: %w", err))
@@ -114,6 +134,43 @@ func (uc *processUseCaseImpl) Execute(ctx context.Context, cmd commands.ProcessC
 	}
 
 	logging.Info("Video processing completed", "video_id", cmd.VideoID, "frame_count", frameCount)
+	return nil
+}
+
+func createZip(srcDir, destPath string) error {
+	zipFile, err := os.Create(destPath)
+	if err != nil {
+		return err
+	}
+	defer zipFile.Close()
+
+	w := zip.NewWriter(zipFile)
+	defer w.Close()
+
+	entries, err := os.ReadDir(srcDir)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		src, err := os.Open(filepath.Join(srcDir, entry.Name()))
+		if err != nil {
+			return err
+		}
+		dst, err := w.Create(entry.Name())
+		if err != nil {
+			src.Close()
+			return err
+		}
+		if _, err := io.Copy(dst, src); err != nil {
+			src.Close()
+			return err
+		}
+		src.Close()
+	}
 	return nil
 }
 
