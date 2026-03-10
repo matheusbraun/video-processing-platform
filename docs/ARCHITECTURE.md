@@ -630,4 +630,4 @@ graph TD
 
 ---
 
-*Decisões arquiteturais detalhadas estão documentadas nos [ADRs](docs/adr/).*
+*Decisões arquiteturais detalhadas estão documentadas nos [ADRs](adr/).*
